@@ -1,3 +1,4 @@
+from database import init_db, save_conversation
 import os
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -69,12 +70,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply = "Maaf, sedang ada gangguan sistem. Coba lagi dalam beberapa saat ya."
         print(f"Error saat memanggil LLM: {e}")
 
-    await update.message.reply_text(reply)
+    save_conversation(
+        user_id=str(update.effective_user.id),
+        username=update.effective_user.username or "unknown",
+        message=user_text,
+        reply=reply
+    )
 
 # Main function untuk jalankan bot
 def main():
+    init_db()  # Buat tabel database kalau belum ada
     app = Application.builder().token(TELEGRAM_TOKEN).build()
-
+      
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CallbackQueryHandler(button_handler))
@@ -85,3 +92,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
