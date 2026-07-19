@@ -43,3 +43,30 @@ def get_recent_conversations(limit=10):
     rows = cursor.fetchall()
     conn.close()
     return rows
+
+def init_booking_table():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS bookings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            username TEXT,
+            layanan TEXT,
+            tanggal TEXT,
+            status TEXT,
+            created_at TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def save_booking(user_id, username, layanan, tanggal):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO bookings (user_id, username, layanan, tanggal, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (user_id, username, layanan, tanggal, "confirmed", datetime.now().isoformat()))
+    conn.commit()
+    conn.close()

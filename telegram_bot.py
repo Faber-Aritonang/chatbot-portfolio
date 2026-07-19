@@ -1,8 +1,8 @@
-from database import init_db, save_conversation
+from database import init_db, save_conversation, init_booking_table, save_booking
 import os
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ConversationHandler, filters, ContextTypes
 from openai import OpenAI
 
 # Muat variabel dari .env
@@ -14,6 +14,8 @@ llm_client = OpenAI(
     base_url="http://localhost:11434/v1",
     api_key="ollama"
 )
+# State untuk alur booking
+PILIH_LAYANAN, INPUT_TANGGAL, KONFIRMASI = range(3)
 
 # Handler untuk command /start - sekarang dengan tombol interaktif
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -77,11 +79,101 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply=reply
     )
 
+# Mulai alur booking
+async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton("💇 Potong Rambut", callback_data="potong_rambut")],
+        [InlineKeyboardButton("💆 Pijat/Spa", callback_data="pijat_spa")],
+        [InlineKeyboardButton("🚗 Servis Kendaraan", callback_data="servis_kendaraan")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(
+        "Silakan pilih layanan yang ingin dibooking:",
+        reply_markup=reply_markup
+    )
+    return PILIH_LAYANAN
+
+# User memilih layanan
+async def layanan_dipilih(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    layanan_map = {
+        "potong_rambut": "Potong Rambut",
+        "pijat_spa": "Pijat/Spa",
+        "servis_kendaraan": "Servis Kendaraan"
+    }
+    layanan = layanan_map.get(query.data, "Tidak diketahui")
+    context.user_data["layanan"] = layanan
+
+    await query.edit_message_text(
+        f"Anda memilih: {layanan}\n\nSilakan ketik tanggal booking (format: DD-MM-YYYY), contoh: 25-12-2026"
+    )
+    return INPUT_TANGGAL
+
+# User mengetik tanggal
+async def tanggal_diterima(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    tanggal = update.message.text
+    context.user_data["tanggal"] = tanggal
+    layanan = context.user_data.get("layanan", "Tidak diketahui")
+
+    keyboard = [
+        [InlineKeyboardButton("✅ Konfirmasi", callback_data="konfirmasi_ya")],
+        [InlineKeyboardButton("❌ Batal", callback_data="konfirmasi_batal")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.message.reply_text(
+        f"Ringkasan booking Anda:\nLayanan: {layanan}\nTanggal: {tanggal}\n\nKonfirmasi booking ini?",
+        reply_markup=reply_markup
+    )
+    return KONFIRMASI
+
+# User konfirmasi atau batal
+async def konfirmasi_booking(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "konfirmasi_ya":
+        layanan = context.user_data.get("layanan")
+        tanggal = context.user_data.get("tanggal")
+        user_id = str(update.effective_user.id)
+        username = update.effective_user.username or "unknown"
+
+        save_booking(user_id, username, layanan, tanggal)
+
+        await query.edit_message_text(
+            f"✅ Booking berhasil dikonfirmasi!\nLayanan: {layanan}\nTanggal: {tanggal}\n\nTerima kasih!"
+        )
+    else:
+        await query.edit_message_text("Booking dibatalkan. Ketik /booking untuk mulai lagi.")
+
+    context.user_data.clear()
+    return ConversationHandler.END
+
+# Handler kalau user ketik /cancel di tengah proses booking
+async def batal_booking(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Booking dibatalkan.")
+    context.user_data.clear()
+    return ConversationHandler.END
+
 # Main function untuk jalankan bot
 def main():
     init_db()  # Buat tabel database kalau belum ada
+    init_booking_table()
     app = Application.builder().token(TELEGRAM_TOKEN).build()
-      
+# ConversationHandler untuk alur booking
+    booking_conv = ConversationHandler(
+        entry_points=[CommandHandler("booking", booking_start)],
+        states={
+            PILIH_LAYANAN: [CallbackQueryHandler(layanan_dipilih)],
+            INPUT_TANGGAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, tanggal_diterima)],
+            KONFIRMASI: [CallbackQueryHandler(konfirmasi_booking)],
+        },
+        fallbacks=[CommandHandler("cancel", batal_booking)],
+    )
+   
+    app.add_handler(booking_conv)   
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CallbackQueryHandler(button_handler))
