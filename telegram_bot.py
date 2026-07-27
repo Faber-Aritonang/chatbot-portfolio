@@ -1,3 +1,6 @@
+import asyncio
+from telegram.error import TimedOut, NetworkError
+from datetime import datetime
 from database import init_db, save_conversation, init_booking_table, save_booking
 import os
 from dotenv import load_dotenv
@@ -14,6 +17,28 @@ llm_client = OpenAI(
     base_url="http://localhost:11434/v1",
     api_key="ollama"
 )
+async def kirim_pesan_aman(update_or_query, text, reply_markup=None, max_retry=3):
+    """
+    Kirim pesan dengan retry otomatis kalau terjadi gangguan jaringan.
+    Bisa dipakai untuk update.message.reply_text ATAU query.edit_message_text.
+    """
+    for percobaan in range(1, max_retry + 1):
+        try:
+            if hasattr(update_or_query, "message"):
+                # ini adalah 'update', pakai reply_text
+                await update_or_query.message.reply_text(text, reply_markup=reply_markup)
+            else:
+                # ini adalah 'query' (callback), pakai edit_message_text
+                await update_or_query.edit_message_text(text, reply_markup=reply_markup)
+            return True  # berhasil, keluar dari loop
+        except (TimedOut, NetworkError) as e:
+            print(f"Percobaan {percobaan}/{max_retry} gagal: {e}")
+            if percobaan < max_retry:
+                await asyncio.sleep(2)  # tunggu 2 detik sebelum coba lagi
+            else:
+                print(f"Gagal kirim pesan setelah {max_retry} percobaan.")
+                return False
+
 # State untuk alur booking
 PILIH_LAYANAN, INPUT_TANGGAL, KONFIRMASI = range(3)
 
@@ -97,7 +122,6 @@ async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def layanan_dipilih(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-
     layanan_map = {
         "potong_rambut": "Potong Rambut",
         "pijat_spa": "Pijat/Spa",
@@ -113,9 +137,61 @@ async def layanan_dipilih(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # User mengetik tanggal
 async def tanggal_diterima(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    tanggal = update.message.text
-    context.user_data["tanggal"] = tanggal
-    layanan = context.user_data.get("layanan", "Tidak diketahui")
+    tanggal_text = update.message.text.strip()
+
+    # Validasi format tanggal DD-MM-YYYY
+    try:
+        tanggal_obj = datetime.strptime(tanggal_text, "%d-%m-%Y")
+    except ValueError:
+        await kirim_pesan_aman(
+            update,
+            "Format tanggal tidak valid. Mohon ketik dengan format DD-MM-YYYY, contoh: 25-12-2026"
+        )
+        return INPUT_TANGGAL  # pesan error format
+
+    # Validasi tanggal tidak boleh di masa lalu
+    if tanggal_obj.date() < datetime.now().date():
+        await kirim_pesan_aman(
+            update,
+            "Tanggal yang Anda masukkan sudah lewat. Mohon pilih tanggal hari ini atau setelahnya."
+        )
+        return INPUT_TANGGAL
+
+    context.user_data["tanggal"] = tanggal_text
+    context.user_data["tanggal"] = tanggal_text
+    layanan = context.user_data.get("layanan")
+
+    if not layanan:
+        await kirim_pesan_aman(
+            update,
+            "Sepertinya sesi booking Anda terputus. Mohon mulai ulang dengan mengetik /booking"
+        )
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    keyboard = [
+        [InlineKeyboardButton("✅ Konfirmasi", callback_data="konfirmasi_ya")],
+        [InlineKeyboardButton("❌ Batal", callback_data="konfirmasi_batal")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.message.reply_text(
+        f"Ringkasan booking Anda:\nLayanan: {layanan}\nTanggal: {tanggal_text}\n\nKonfirmasi booking ini?",
+        reply_markup=reply_markup
+    )
+    return KONFIRMASI
+
+    keyboard = [
+        [InlineKeyboardButton("✅ Konfirmasi", callback_data="konfirmasi_ya")],
+        [InlineKeyboardButton("❌ Batal", callback_data="konfirmasi_batal")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.message.reply_text(
+        f"Ringkasan booking Anda:\nLayanan: {layanan}\nTanggal: {tanggal_text}\n\nKonfirmasi booking ini?",
+        reply_markup=reply_markup
+    )
+    return KONFIRMASI
 
     keyboard = [
         [InlineKeyboardButton("✅ Konfirmasi", callback_data="konfirmasi_ya")],
@@ -184,4 +260,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
