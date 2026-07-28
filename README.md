@@ -1,45 +1,78 @@
-# Chatbot Portfolio - Jimmy Faber Aritonang
+# Chatbot Portfolio — Jimmy Faber
 
-Bot Telegram sederhana yang terintegrasi dengan LLM (Qwen 2.5 7B via Ollama).
+Bot Telegram dan WhatsApp yang terintegrasi dengan LLM (Qwen 2.5 7B via Ollama), dengan fitur booking/appointment lengkap: dialogue state management, validasi input, cek ketersediaan jadwal, manajemen booking, dan reminder otomatis.
+
+Coba Langsung: Bot Telegram — t.me/sidodol_chatbot_bot
+
+## Riwayat Versi
+
+| Versi | Fitur |
+|---|---|
+| v1.0 | Bot dasar Telegram & WhatsApp, integrasi LLM, booking flow sederhana (dialogue state) |
+| v1.1 | Validasi format & tanggal lewat, retry logic untuk gangguan jaringan, pengaman data booking tidak lengkap |
+| v1.2 | Cek ketersediaan jadwal — kapasitas maksimal booking per layanan per tanggal |
+| v1.3 | Fitur /mybookings — lihat dan batalkan booking aktif, dengan validasi kepemilikan user |
+| v1.4 | Reminder otomatis — notifikasi H-1 sebelum jadwal booking via job scheduler |
+
+Lihat riwayat lengkap di GitHub Releases/Tags: https://github.com/Faber-Aritonang/chatbot-portfolio/tags
 
 ## Fitur
-- Command /start dan /help
+
+### Telegram Bot
+- Command handling (/start, /help, /booking, /mybookings, /cancel)
 - Tombol interaktif (inline keyboard)
-- Chat bebas dengan AI
-- Fallback handling untuk error
+- Chat bebas dengan AI (LLM)
+- Booking flow dengan dialogue state (ConversationHandler):
+  1. /booking -> pilih layanan -> input tanggal -> konfirmasi -> tersimpan ke database
+  2. Validasi format tanggal (DD-MM-YYYY) dan penolakan tanggal yang sudah lewat
+  3. Cek ketersediaan jadwal - booking ditolak otomatis kalau kapasitas harian penuh
+  4. /mybookings - lihat booking aktif dan batalkan kapan saja
+  5. Reminder otomatis dikirim H-1 sebelum jadwal
+- Retry logic otomatis untuk gangguan jaringan saat mengirim pesan
+- Fallback handling untuk input tidak valid, error LLM, dan sesi yang terputus
 
-## Tech Stack
-- Python
-- python-telegram-bot
-- FastAPI
-- Ollama (Qwen 2.5 7B)
-
-
-## WhatsApp Bot
-Bot WhatsApp yang terintegrasi dengan WhatsApp Cloud API (Meta), mendukung:
-- Webhook untuk menerima pesan real-time
+### WhatsApp Bot
+- Webhook receiver menggunakan FastAPI, tunneling via ngrok untuk pengembangan lokal
 - Integrasi LLM (Qwen 2.5 7B) untuk balasan otomatis
 - Message status tracking (sent/delivered/failed)
-- Teruji end-to-end dengan pemahaman terhadap keterbatasan kebijakan regional Meta pada akun test
+- Catatan jujur: Teruji end-to-end untuk penerimaan pesan dan pemrosesan webhook. Pengiriman keluar ke nomor Indonesia saat ini terblokir oleh kebijakan cross-border messaging Meta (error 130497) pada nomor uji coba (sandbox) - ini keterbatasan kebijakan platform, bukan keterbatasan kode.
 
-## Booking Flow (Dialogue State Management)
-Fitur pemesanan/booking dengan alur percakapan bertahap di Bot Telegram, menggunakan `ConversationHandler`:
+## Tech Stack
 
-1. User ketik `/booking`
-2. Bot menampilkan pilihan layanan (tombol interaktif)
-3. User memilih layanan → bot meminta tanggal
-4. User mengetik tanggal → bot menampilkan ringkasan untuk konfirmasi
-5. User konfirmasi → data tersimpan ke database
-6. User bisa membatalkan proses kapan saja dengan `/cancel`
+- Bahasa: Python
+- Bot Framework: python-telegram-bot (dengan ConversationHandler untuk dialogue state, JobQueue untuk scheduler)
+- Web Framework: FastAPI (webhook receiver untuk WhatsApp)
+- HTTP Client: httpx (async)
+- LLM: Qwen 2.5 7B (lokal via Ollama) - kompatibel dengan OpenAI/Anthropic API untuk deployment produksi
+- Database: SQLite (riwayat percakapan, data booking)
+- Tunneling: ngrok (untuk pengembangan webhook lokal)
 
-Ini mendemonstrasikan kemampuan mengelola **dialogue state** (bot mengingat tahap percakapan user) dan **fallback handling**, relevan untuk use case seperti appointment booking dan order taking.
+## Setup
 
-### Contoh Alur
-```
-/booking → Pilih layanan → Input tanggal → Konfirmasi → Tersimpan di database
-```
+python3 -m venv venv
+source venv/bin/activate
+pip install fastapi uvicorn python-telegram-bot[job-queue] httpx python-dotenv openai
+cp .env.example .env
+python3 telegram_bot.py
 
-### Tech Stack Tambahan
-- FastAPI (webhook receiver)
-- httpx (async HTTP client)
-- ngrok (tunnel untuk testing lokal)
+## Struktur Proyek
+
+chatbot-portfolio/
+- telegram_bot.py      : Bot Telegram lengkap dengan booking flow
+- whatsapp_bot.py      : Webhook receiver untuk WhatsApp Cloud API
+- server.py            : FastAPI bridge dasar
+- database.py          : Modul database SQLite (conversations & bookings)
+- test_llm.py          : Script test koneksi LLM standalone
+- README.md
+
+## Roadmap Pengembangan Selanjutnya
+
+- Dashboard analisis data booking (layanan terpopuler, jam/hari tersibuk)
+- Notifikasi ke admin/pemilik bisnis setiap ada booking baru
+- Deduplikasi pesan WhatsApp berbasis message ID
+- Deployment ke cloud (Render/Railway) dengan LLM cloud API untuk akses 24/7
+
+## Kontak
+
+Jimmy Faber - faber.aritonang@gmail.com
+LinkedIn: linkedin.com/in/jimmyfaber-7ab463279
