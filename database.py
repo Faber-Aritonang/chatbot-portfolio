@@ -82,3 +82,29 @@ def hitung_booking_pada_tanggal(layanan, tanggal):
     hasil = cursor.fetchone()
     conn.close()
     return hasil[0] if hasil else 0
+
+def get_user_bookings(user_id):
+    """Ambil semua booking aktif (confirmed) milik seorang user"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, layanan, tanggal FROM bookings
+        WHERE user_id = ? AND status = 'confirmed'
+        ORDER BY tanggal ASC
+    """, (user_id,))
+    hasil = cursor.fetchall()
+    conn.close()
+    return hasil
+
+def cancel_booking(booking_id, user_id):
+    """Batalkan booking, hanya jika booking itu milik user yang meminta"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE bookings SET status = 'cancelled'
+        WHERE id = ? AND user_id = ?
+    """, (booking_id, user_id))
+    berhasil = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return berhasil

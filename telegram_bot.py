@@ -2,6 +2,7 @@ import asyncio
 from telegram.error import TimedOut, NetworkError
 from datetime import datetime
 from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal
+from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal, get_user_bookings, cancel_booking
 import os
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -243,7 +244,43 @@ async def batal_booking(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Booking dibatalkan.")
     context.user_data.clear()
     return ConversationHandler.END
+#Handler cancel setelah booking terjadi
+async def my_bookings(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    bookings = get_user_bookings(user_id)
 
+    if not bookings:
+        await update.message.reply_text("Anda belum memiliki booking aktif. Ketik /booking untuk membuat booking baru.")
+        return
+
+    keyboard = []
+    for booking_id, layanan, tanggal in bookings:
+        keyboard.append([
+            InlineKeyboardButton(
+                f"❌ Batal: {layanan} - {tanggal}",
+                callback_data=f"cancel_{booking_id}"
+            )
+        ])
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(
+        "Booking aktif Anda:\n\nKlik tombol untuk membatalkan booking tertentu.",
+        reply_markup=reply_markup
+    )
+
+async def cancel_booking_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    booking_id = int(query.data.replace("cancel_", ""))
+    user_id = str(update.effective_user.id)
+
+    berhasil = cancel_booking(booking_id, user_id)
+
+    if berhasil:
+        await query.edit_message_text("✅ Booking berhasil dibatalkan.")
+    else:
+        await query.edit_message_text("Gagal membatalkan booking. Mungkin sudah dibatalkan sebelumnya.")
 # Main function untuk jalankan bot
 def main():
     init_db()  # Buat tabel database kalau belum ada
@@ -261,6 +298,8 @@ def main():
     )
    
     app.add_handler(booking_conv)   
+    app.add_handler(CommandHandler("mybookings", my_bookings))
+    app.add_handler(CallbackQueryHandler(cancel_booking_handler, pattern="^cancel_"))
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CallbackQueryHandler(button_handler))
