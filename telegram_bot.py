@@ -1,7 +1,7 @@
 import asyncio
 from telegram.error import TimedOut, NetworkError
 from datetime import datetime
-from database import init_db, save_conversation, init_booking_table, save_booking
+from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal
 import os
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -41,6 +41,7 @@ async def kirim_pesan_aman(update_or_query, text, reply_markup=None, max_retry=3
 
 # State untuk alur booking
 PILIH_LAYANAN, INPUT_TANGGAL, KONFIRMASI = range(3)
+KAPASITAS_PER_HARI = 3  # maksimal booking per layanan per tanggal
 
 # Handler untuk command /start - sekarang dengan tombol interaktif
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -169,6 +170,16 @@ async def tanggal_diterima(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.clear()
         return ConversationHandler.END
 
+# Cek ketersediaan jadwal
+    jumlah_booking = hitung_booking_pada_tanggal(layanan, tanggal_text)
+    if jumlah_booking >= KAPASITAS_PER_HARI:
+        await kirim_pesan_aman(
+            update,
+            f"Mohon maaf, jadwal {layanan} pada tanggal {tanggal_text} sudah penuh "
+            f"({jumlah_booking}/{KAPASITAS_PER_HARI} slot terisi).\n\n"
+            f"Silakan ketik tanggal lain."
+        )
+        return INPUT_TANGGAL
     keyboard = [
         [InlineKeyboardButton("✅ Konfirmasi", callback_data="konfirmasi_ya")],
         [InlineKeyboardButton("❌ Batal", callback_data="konfirmasi_batal")],

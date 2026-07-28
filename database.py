@@ -70,3 +70,15 @@ def save_booking(user_id, username, layanan, tanggal):
     """, (user_id, username, layanan, tanggal, "confirmed", datetime.now().isoformat()))
     conn.commit()
     conn.close()
+
+def hitung_booking_pada_tanggal(layanan, tanggal):
+    """Hitung berapa booking yang sudah ada untuk layanan & tanggal tertentu"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT COUNT(*) FROM bookings
+        WHERE layanan = ? AND tanggal = ? AND status = 'confirmed'
+    """, (layanan, tanggal))
+    hasil = cursor.fetchone()
+    conn.close()
+    return hasil[0] if hasil else 0
