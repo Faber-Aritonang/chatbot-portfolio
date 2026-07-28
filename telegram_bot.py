@@ -1,9 +1,9 @@
 import asyncio
 from telegram.error import TimedOut, NetworkError
 from datetime import datetime
-from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal
-from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal, get_user_bookings, cancel_booking
+from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal, get_user_bookings, cancel_booking, get_bookings_untuk_reminder, tandai_sudah_diingatkan
 import os
+from datetime import datetime, timedelta, time
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ConversationHandler, filters, ContextTypes
@@ -281,7 +281,22 @@ async def cancel_booking_handler(update: Update, context: ContextTypes.DEFAULT_T
         await query.edit_message_text("✅ Booking berhasil dibatalkan.")
     else:
         await query.edit_message_text("Gagal membatalkan booking. Mungkin sudah dibatalkan sebelumnya.")
-# Main function untuk jalankan bot
+async def kirim_reminder(context: ContextTypes.DEFAULT_TYPE):
+    """Dipanggil otomatis setiap hari, kirim reminder untuk booking besok"""
+    besok = (datetime.now() + timedelta(days=1)).strftime("%d-%m-%Y")
+    daftar_booking = get_bookings_untuk_reminder(besok)
+
+    for booking_id, user_id, layanan, tanggal in daftar_booking:
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=f"⏰ Pengingat: Anda memiliki booking {layanan} besok ({tanggal}). Sampai jumpa!"
+            )
+            tandai_sudah_diingatkan(booking_id)
+            print(f"Reminder terkirim untuk booking {booking_id}")
+        except Exception as e:
+            print(f"Gagal kirim reminder untuk booking {booking_id}: {e}")
+
 def main():
     init_db()  # Buat tabel database kalau belum ada
     init_booking_table()
@@ -304,7 +319,9 @@ def main():
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
+# Jalankan pengecekan reminder setiap hari jam 09:00
+    
+    app.job_queue.run_daily(kirim_reminder, time=time(hour=9, minute=0))
     print("Bot sedang berjalan... Tekan Ctrl+C untuk berhenti.")
     app.run_polling()
 

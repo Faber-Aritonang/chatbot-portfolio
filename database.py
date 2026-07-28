@@ -44,20 +44,22 @@ def get_recent_conversations(limit=10):
     conn.close()
     return rows
 
-def init_booking_table():
+def get_bookings_untuk_reminder(tanggal):
+    """Ambil booking yang jadwalnya besok dan belum dikirimi reminder"""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS bookings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT,
-            username TEXT,
-            layanan TEXT,
-            tanggal TEXT,
-            status TEXT,
-            created_at TEXT
-        )
-    """)
+        SELECT id, user_id, layanan, tanggal FROM bookings
+        WHERE tanggal = ? AND status = 'confirmed' AND reminded = 0
+    """, (tanggal,))
+    hasil = cursor.fetchall()
+    conn.close()
+    return hasil
+
+def tandai_sudah_diingatkan(booking_id):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE bookings SET reminded = 1 WHERE id = ?", (booking_id,))
     conn.commit()
     conn.close()
 
@@ -108,3 +110,27 @@ def cancel_booking(booking_id, user_id):
     conn.commit()
     conn.close()
     return berhasil
+
+
+
+def init_booking_table():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS bookings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            username TEXT,
+            layanan TEXT,
+            tanggal TEXT,
+            status TEXT,
+            created_at TEXT,
+            reminded INTEGER DEFAULT 0
+        )
+    """)
+    try:
+        cursor.execute("ALTER TABLE bookings ADD COLUMN reminded INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    conn.commit()
+    conn.close()
