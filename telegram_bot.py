@@ -1,7 +1,7 @@
 import asyncio
 from telegram.error import TimedOut, NetworkError
 from datetime import datetime
-from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal, get_user_bookings, cancel_booking, get_bookings_untuk_reminder, tandai_sudah_diingatkan, init_customer_table, upsert_customer, get_customer, tambah_hitungan_booking, init_complaint_table, save_complaint
+from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal, get_user_bookings, cancel_booking, get_bookings_untuk_reminder, tandai_sudah_diingatkan, init_customer_table, upsert_customer, get_customer, tambah_hitungan_booking, init_complaint_table, save_complaint, get_complaint, update_complaint_status
 import os
 from datetime import datetime, timedelta, time
 from dotenv import load_dotenv
@@ -138,10 +138,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if intent == "komplain":
-        save_complaint(user_id, username, user_text)
+        complaint_id = save_complaint(user_id, username, user_text)
         await update.message.reply_text(
             "Mohon maaf atas ketidaknyamanannya 🙏 Keluhan Anda sudah kami catat dan akan segera ditindaklanjuti oleh tim kami."
         )
+
+        # Eskalasi ke admin
+        admin_id = os.getenv("ADMIN_TELEGRAM_ID")
+        if admin_id:
+            try:
+                await context.bot.send_message(
+                    chat_id=admin_id,
+                    text=(
+                        f"⚠️ KOMPLAIN BARU (ID: {complaint_id})\n"
+                        f"Dari: @{username} (user_id: {user_id})\n"
+                        f"Isi: {user_text}\n\n"
+                        f"Balas dengan /tanggapi {complaint_id} <pesan> untuk merespons."
+                    )
+                )
+            except Exception as e:
+                print(f"Gagal kirim notifikasi ke admin: {e}")
         return
 
     if intent == "faq_jam":
@@ -374,6 +390,46 @@ async def kirim_reminder(context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             print(f"Gagal kirim reminder untuk booking {booking_id}: {e}")
 
+
+async def tanggapi_komplain(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler khusus admin: /tanggapi <id> <pesan>"""
+    admin_id = os.getenv("ADMIN_TELEGRAM_ID")
+    pengirim_id = str(update.effective_user.id)
+
+    if pengirim_id != admin_id:
+        await update.message.reply_text("Maaf, perintah ini hanya untuk admin.")
+        return
+
+    args = context.args
+    if len(args) < 2:
+        await update.message.reply_text("Format: /tanggapi <id_komplain> <pesan balasan>")
+        return
+
+    try:
+        complaint_id = int(args[0])
+    except ValueError:
+        await update.message.reply_text("ID komplain harus berupa angka.")
+        return
+
+    pesan_balasan = " ".join(args[1:])
+    komplain = get_complaint(complaint_id)
+
+    if not komplain:
+        await update.message.reply_text(f"Komplain dengan ID {complaint_id} tidak ditemukan.")
+        return
+
+    _, user_id_pelanggan, username_pelanggan, isi_komplain, status = komplain
+
+    try:
+        await context.bot.send_message(
+            chat_id=user_id_pelanggan,
+            text=f"📩 Tanggapan dari tim kami terkait keluhan Anda:\n\n{pesan_balasan}"
+        )
+        update_complaint_status(complaint_id, "ditanggapi")
+        await update.message.reply_text(f"✅ Tanggapan berhasil dikirim ke pelanggan (komplain ID {complaint_id}).")
+    except Exception as e:
+        await update.message.reply_text(f"Gagal mengirim tanggapan: {e}")
+
 def main():
     init_db()  # Buat tabel database kalau belum ada
     init_booking_table()
@@ -393,6 +449,7 @@ def main():
    
     app.add_handler(booking_conv)   
     app.add_handler(CommandHandler("mybookings", my_bookings))
+    app.add_handler(CommandHandler("tanggapi", tanggapi_komplain))
     app.add_handler(CallbackQueryHandler(cancel_booking_handler, pattern="^cancel_"))
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))

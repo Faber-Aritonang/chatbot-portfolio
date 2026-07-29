@@ -188,3 +188,52 @@ def tambah_hitungan_booking(user_id):
     cursor.execute("UPDATE customers SET total_booking = total_booking + 1 WHERE user_id = ?", (user_id,))
     conn.commit()
     conn.close()
+
+
+def init_complaint_table():
+    """Membuat tabel untuk mencatat komplain pelanggan"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS complaints (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            username TEXT,
+            isi_komplain TEXT,
+            status TEXT DEFAULT 'baru',
+            created_at TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def save_complaint(user_id, username, isi_komplain):
+    """Simpan komplain baru dengan status 'baru' (menunggu ditindaklanjuti), kembalikan ID-nya"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO complaints (user_id, username, isi_komplain, status, created_at)
+        VALUES (?, ?, ?, 'baru', ?)
+    """, (user_id, username, isi_komplain, datetime.now().isoformat()))
+    complaint_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return complaint_id
+
+
+def get_complaint(complaint_id):
+    """Ambil detail 1 komplain berdasarkan ID"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, user_id, username, isi_komplain, status FROM complaints WHERE id = ?", (complaint_id,))
+    hasil = cursor.fetchone()
+    conn.close()
+    return hasil
+
+def update_complaint_status(complaint_id, status):
+    """Update status komplain, misal jadi 'ditanggapi'"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE complaints SET status = ? WHERE id = ?", (status, complaint_id))
+    conn.commit()
+    conn.close()
