@@ -37,6 +37,12 @@ Lihat riwayat lengkap di GitHub Releases/Tags: https://github.com/Faber-Aritonan
 - Message status tracking (sent/delivered/failed)
 - Catatan jujur: Teruji end-to-end untuk penerimaan pesan dan pemrosesan webhook. Pengiriman keluar ke nomor Indonesia saat ini terblokir oleh kebijakan cross-border messaging Meta (error 130497) pada nomor uji coba (sandbox) - ini keterbatasan kebijakan platform, bukan keterbatasan kode.
 
+## Catatan Keterbatasan Model Lokal
+
+Bot ini menggunakan Qwen 2.5 7B (via Ollama) sebagai LLM untuk pengembangan tanpa biaya. Sebagai model open-source berukuran kecil yang berjalan di CPU, sesekali dapat mencampur bahasa (misal Bahasa Indonesia dengan Mandarin) terutama pada topik teknis yang kompleks — ini adalah keterbatasan bawaan model, bukan bug pada kode.
+
+Untuk lingkungan produksi, arsitektur bot ini sudah dirancang agar mudah dipindah ke model cloud (OpenAI atau Anthropic Claude) hanya dengan mengganti `base_url`, API key, dan nama model — tanpa perlu mengubah struktur kode lainnya.
+
 ## Tech Stack
 
 - Bahasa: Python

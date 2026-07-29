@@ -1,7 +1,7 @@
 import asyncio
 from telegram.error import TimedOut, NetworkError
 from datetime import datetime
-from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal, get_user_bookings, cancel_booking, get_bookings_untuk_reminder, tandai_sudah_diingatkan, init_customer_table, upsert_customer, get_customer, tambah_hitungan_booking
+from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal, get_user_bookings, cancel_booking, get_bookings_untuk_reminder, tandai_sudah_diingatkan, init_customer_table, upsert_customer, get_customer, tambah_hitungan_booking, init_complaint_table, save_complaint
 import os
 from datetime import datetime, timedelta, time
 from dotenv import load_dotenv
@@ -90,18 +90,78 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # Handler untuk pesan teks bebas - sekarang dengan fallback handling
+
+# Data FAQ tetap - jawaban langsung tanpa perlu panggil LLM
+FAQ_JAWABAN = {
+    "jam": "Jam operasional kami: Senin-Sabtu, 09.00 - 20.00 WIB.",
+    "lokasi": "Lokasi kami: Jl. Contoh No. 123, Tangerang, Banten.",
+    "harga": "Harga layanan mulai dari Rp50.000 tergantung jenis layanan. Ketik /booking untuk melihat pilihan layanan.",
+}
+
+def deteksi_intent(teks: str) -> str:
+    """Deteksi maksud user berdasarkan kata kunci sederhana"""
+    teks_lower = teks.lower()
+
+    kata_kunci_booking = ["booking", "pesan", "reservasi", "jadwal"]
+    kata_kunci_komplain = ["komplain", "keluhan", "kecewa", "buruk", "jelek", "tidak puas", "protes"]
+    kata_kunci_jam = ["jam buka", "jam operasional", "jam berapa", "buka jam"]
+    kata_kunci_lokasi = ["lokasi", "alamat", "dimana", "di mana"]
+    kata_kunci_harga = ["harga", "biaya", "tarif", "berapa harga"]
+
+    if any(kata in teks_lower for kata in kata_kunci_komplain):
+        return "komplain"
+    if any(kata in teks_lower for kata in kata_kunci_jam):
+        return "faq_jam"
+    if any(kata in teks_lower for kata in kata_kunci_lokasi):
+        return "faq_lokasi"
+    if any(kata in teks_lower for kata in kata_kunci_harga):
+        return "faq_harga"
+    if any(kata in teks_lower for kata in kata_kunci_booking):
+        return "booking"
+
+    return "umum"
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
+    user_id = str(update.effective_user.id)
+    username = update.effective_user.username or "unknown"
 
     # Fallback sederhana: kalau pesan terlalu pendek/tidak jelas
     if len(user_text.strip()) < 2:
         await update.message.reply_text("Pesan Anda terlalu pendek, coba tulis lebih lengkap ya 🙂")
         return
 
+    intent = deteksi_intent(user_text)
+
+    if intent == "booking":
+        await update.message.reply_text("Sepertinya Anda ingin membuat booking. Silakan ketik /booking untuk memulai.")
+        return
+
+    if intent == "komplain":
+        save_complaint(user_id, username, user_text)
+        await update.message.reply_text(
+            "Mohon maaf atas ketidaknyamanannya 🙏 Keluhan Anda sudah kami catat dan akan segera ditindaklanjuti oleh tim kami."
+        )
+        return
+
+    if intent == "faq_jam":
+        await update.message.reply_text(FAQ_JAWABAN["jam"])
+        return
+
+    if intent == "faq_lokasi":
+        await update.message.reply_text(FAQ_JAWABAN["lokasi"])
+        return
+
+    if intent == "faq_harga":
+        await update.message.reply_text(FAQ_JAWABAN["harga"])
+        return
+
     try:
         response = llm_client.chat.completions.create(
             model="qwen2.5:7b",
-            messages=[{"role": "user", "content": user_text}]
+            messages=[
+                {"role": "user", "content": f"Jawab pertanyaan berikut HANYA dalam Bahasa Indonesia, jangan gunakan bahasa lain sama sekali: {user_text}"}
+            ]
         )
         reply = response.choices[0].message.content
 
@@ -119,6 +179,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message=user_text,
         reply=reply
     )
+
+    await update.message.reply_text(reply)
 
 # Mulai alur booking
 async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -316,6 +378,7 @@ def main():
     init_db()  # Buat tabel database kalau belum ada
     init_booking_table()
     init_customer_table()
+    init_complaint_table()
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 # ConversationHandler untuk alur booking
     booking_conv = ConversationHandler(
