@@ -1,7 +1,7 @@
 import asyncio
 from telegram.error import TimedOut, NetworkError
 from datetime import datetime
-from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal, get_user_bookings, cancel_booking, get_bookings_untuk_reminder, tandai_sudah_diingatkan
+from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal, get_user_bookings, cancel_booking, get_bookings_untuk_reminder, tandai_sudah_diingatkan, init_customer_table, upsert_customer, get_customer, tambah_hitungan_booking
 import os
 from datetime import datetime, timedelta, time
 from dotenv import load_dotenv
@@ -46,15 +46,27 @@ KAPASITAS_PER_HARI = 3  # maksimal booking per layanan per tanggal
 
 # Handler untuk command /start - sekarang dengan tombol interaktif
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    username = update.effective_user.username or "unknown"
+
+    # Catat/perbarui profil pelanggan setiap kali mereka mulai chat
+    upsert_customer(user_id, username)
+    customer = get_customer(user_id)
+
     keyboard = [
         [InlineKeyboardButton("💬 Chat Bebas", callback_data="chat_bebas")],
+        [InlineKeyboardButton("📅 Booking", callback_data="menu_booking")],
         [InlineKeyboardButton("ℹ️ Tentang Bot", callback_data="tentang")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
-        "Halo! Saya bot Si Dodol. Pilih menu di bawah atau langsung ketik pesan bebas:",
-        reply_markup=reply_markup
-    )
+
+    # Sapaan berbeda untuk pelanggan lama vs baru
+    if customer and customer[3] > 0:  # total_booking > 0
+        pesan_sapaan = f"Halo lagi! Senang bertemu Anda kembali 😊 (booking Anda sejauh ini: {customer[3]}x)"
+    else:
+        pesan_sapaan = "Halo! Saya bot Si Dodol. Pilih menu di bawah atau langsung ketik pesan bebas:"
+
+    await update.message.reply_text(pesan_sapaan, reply_markup=reply_markup)
 
 # Handler saat tombol di-klik
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -63,6 +75,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "chat_bebas":
         await query.edit_message_text("Silakan ketik pertanyaan Anda, saya akan coba jawab 🙂")
+    elif query.data == "menu_booking":
+        await query.edit_message_text("Untuk membuat booking, silakan ketik /booking")
     elif query.data == "tentang":
         await query.edit_message_text(
             "Saya adalah bot demo, SiDodol, yang dibuat Jimmy Faber untuk belajar chatbot development.\n"
@@ -229,6 +243,7 @@ async def konfirmasi_booking(update: Update, context: ContextTypes.DEFAULT_TYPE)
         username = update.effective_user.username or "unknown"
 
         save_booking(user_id, username, layanan, tanggal)
+        tambah_hitungan_booking(user_id)
 
         await query.edit_message_text(
             f"✅ Booking berhasil dikonfirmasi!\nLayanan: {layanan}\nTanggal: {tanggal}\n\nTerima kasih!"
@@ -300,6 +315,7 @@ async def kirim_reminder(context: ContextTypes.DEFAULT_TYPE):
 def main():
     init_db()  # Buat tabel database kalau belum ada
     init_booking_table()
+    init_customer_table()
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 # ConversationHandler untuk alur booking
     booking_conv = ConversationHandler(

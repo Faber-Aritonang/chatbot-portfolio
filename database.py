@@ -134,3 +134,57 @@ def init_booking_table():
         pass
     conn.commit()
     conn.close()
+
+
+def init_customer_table():
+    """Membuat tabel profil pelanggan"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS customers (
+            user_id TEXT PRIMARY KEY,
+            username TEXT,
+            nama_panggilan TEXT,
+            total_booking INTEGER DEFAULT 0,
+            first_seen TEXT,
+            last_seen TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def upsert_customer(user_id, username):
+    """Simpan atau update data pelanggan setiap kali mereka berinteraksi"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    now = datetime.now().isoformat()
+    cursor.execute("SELECT user_id FROM customers WHERE user_id = ?", (user_id,))
+    ada = cursor.fetchone()
+    if ada:
+        cursor.execute("""
+            UPDATE customers SET username = ?, last_seen = ? WHERE user_id = ?
+        """, (username, now, user_id))
+    else:
+        cursor.execute("""
+            INSERT INTO customers (user_id, username, first_seen, last_seen)
+            VALUES (?, ?, ?, ?)
+        """, (user_id, username, now, now))
+    conn.commit()
+    conn.close()
+
+def get_customer(user_id):
+    """Ambil data profil pelanggan, None kalau belum pernah interaksi"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id, username, nama_panggilan, total_booking FROM customers WHERE user_id = ?", (user_id,))
+    hasil = cursor.fetchone()
+    conn.close()
+    return hasil
+
+def tambah_hitungan_booking(user_id):
+    """Naikkan counter total booking pelanggan"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE customers SET total_booking = total_booking + 1 WHERE user_id = ?", (user_id,))
+    conn.commit()
+    conn.close()
