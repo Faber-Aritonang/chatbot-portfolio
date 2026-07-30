@@ -15,6 +15,8 @@ Coba Langsung: Bot Telegram — t.me/sidodol_chatbot_bot
 | v1.4 | Reminder otomatis — notifikasi H-1 sebelum jadwal booking via job scheduler |
 | v2.0 | Evolusi menjadi Customer Relation Service (CRS): profil pelanggan (bot mengenali pelanggan lama), deteksi intent sederhana (FAQ/booking/komplain) |
 | v2.1 | Eskalasi komplain ke admin: notifikasi otomatis saat ada keluhan baru, admin dapat membalas langsung via /tanggapi |
+| v2.2 | Konteks percakapan: bot menyertakan riwayat chat sebelumnya saat memanggil LLM untuk respons yang lebih koheren |
+| v2.3 | Feedback/rating: bot otomatis minta rating bintang 1-5 sehari setelah jadwal booking selesai |
 
 Lihat riwayat lengkap di GitHub Releases/Tags: https://github.com/Faber-Aritonang/chatbot-portfolio/tags
 
