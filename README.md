@@ -13,6 +13,8 @@ Coba Langsung: Bot Telegram — t.me/sidodol_chatbot_bot
 | v1.2 | Cek ketersediaan jadwal — kapasitas maksimal booking per layanan per tanggal |
 | v1.3 | Fitur /mybookings — lihat dan batalkan booking aktif, dengan validasi kepemilikan user |
 | v1.4 | Reminder otomatis — notifikasi H-1 sebelum jadwal booking via job scheduler |
+| v2.0 | Evolusi menjadi Customer Relation Service (CRS): profil pelanggan (bot mengenali pelanggan lama), deteksi intent sederhana (FAQ/booking/komplain) |
+| v2.1 | Eskalasi komplain ke admin: notifikasi otomatis saat ada keluhan baru, admin dapat membalas langsung via /tanggapi |
 
 Lihat riwayat lengkap di GitHub Releases/Tags: https://github.com/Faber-Aritonang/chatbot-portfolio/tags
 
