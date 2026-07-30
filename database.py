@@ -302,3 +302,27 @@ def save_rating(booking_id, user_id, layanan, rating):
     """, (booking_id, user_id, layanan, rating, datetime.now().isoformat()))
     conn.commit()
     conn.close()
+
+
+def get_all_customer_ids():
+    """Ambil semua user_id pelanggan yang pernah berinteraksi dengan bot"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id FROM customers")
+    hasil = cursor.fetchall()
+    conn.close()
+    return [row[0] for row in hasil]
+
+
+def get_semua_bookings():
+    """Ambil semua data booking untuk keperluan export"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, user_id, username, layanan, tanggal, status, created_at
+        FROM bookings
+        ORDER BY created_at DESC
+    """)
+    hasil = cursor.fetchall()
+    conn.close()
+    return hasil

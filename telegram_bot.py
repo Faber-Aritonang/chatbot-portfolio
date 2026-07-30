@@ -1,7 +1,9 @@
 import asyncio
+import csv
+import io
 from telegram.error import TimedOut, NetworkError
 from datetime import datetime
-from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal, get_user_bookings, cancel_booking, get_bookings_untuk_reminder, tandai_sudah_diingatkan, init_customer_table, upsert_customer, get_customer, tambah_hitungan_booking, init_complaint_table, save_complaint, get_complaint, update_complaint_status, get_riwayat_percakapan_user, init_rating_table, get_bookings_untuk_feedback, tandai_feedback_terkirim, save_rating
+from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal, get_user_bookings, cancel_booking, get_bookings_untuk_reminder, tandai_sudah_diingatkan, init_customer_table, upsert_customer, get_customer, tambah_hitungan_booking, init_complaint_table, save_complaint, get_complaint, update_complaint_status, get_riwayat_percakapan_user, init_rating_table, get_bookings_untuk_feedback, tandai_feedback_terkirim, save_rating, get_all_customer_ids, get_semua_bookings
 import os
 from datetime import datetime, timedelta, time
 from dotenv import load_dotenv
@@ -173,7 +175,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        riwayat = get_riwayat_percakapan_user, init_rating_table, get_bookings_untuk_feedback, tandai_feedback_terkirim, save_rating(user_id, limit=5)
+        riwayat = get_riwayat_percakapan_user(user_id, limit=5)
         messages_untuk_llm = []
         for pesan_lama, balasan_lama in riwayat:
             messages_untuk_llm.append({"role": "user", "content": pesan_lama})
@@ -476,6 +478,114 @@ async def rating_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.edit_message_text(f"Terima kasih atas rating {'⭐' * rating}-nya! 🙏")
 
+
+async def broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler khusus admin: /broadcast <pesan> - kirim ke semua pelanggan"""
+    admin_id = os.getenv("ADMIN_TELEGRAM_ID")
+    pengirim_id = str(update.effective_user.id)
+
+    if pengirim_id != admin_id:
+        await update.message.reply_text("Maaf, perintah ini hanya untuk admin.")
+        return
+
+    if not context.args:
+        await update.message.reply_text("Format: /broadcast <pesan pengumuman>")
+        return
+
+    pesan_broadcast = " ".join(context.args)
+    daftar_customer = get_all_customer_ids()
+
+    if not daftar_customer:
+        await update.message.reply_text("Belum ada pelanggan yang tercatat untuk dikirimi broadcast.")
+        return
+
+    await update.message.reply_text(f"Mengirim broadcast ke {len(daftar_customer)} pelanggan...")
+
+    berhasil = 0
+    gagal = 0
+
+    for customer_id in daftar_customer:
+        try:
+            await context.bot.send_message(
+                chat_id=customer_id,
+                text=f"📢 Pengumuman:\n\n{pesan_broadcast}"
+            )
+            berhasil += 1
+            await asyncio.sleep(0.5)  # jeda kecil supaya tidak kena rate limit Telegram
+        except Exception as e:
+            gagal += 1
+            print(f"Gagal kirim broadcast ke {customer_id}: {e}")
+
+    await update.message.reply_text(f"Broadcast selesai. Berhasil: {berhasil}, Gagal: {gagal}")
+
+
+async def export_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler khusus admin: /export - kirim data booking sebagai file CSV"""
+    admin_id = os.getenv("ADMIN_TELEGRAM_ID")
+    pengirim_id = str(update.effective_user.id)
+
+    if pengirim_id != admin_id:
+        await update.message.reply_text("Maaf, perintah ini hanya untuk admin.")
+        return
+
+    data_booking = get_semua_bookings()
+
+    if not data_booking:
+        await update.message.reply_text("Belum ada data booking untuk di-export.")
+        return
+
+    # Buat file CSV di memori (tidak perlu simpan ke disk)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["ID", "User ID", "Username", "Layanan", "Tanggal", "Status", "Dibuat Pada"])
+    for row in data_booking:
+        writer.writerow(row)
+
+    # Konversi ke bytes supaya bisa dikirim sebagai file
+    output.seek(0)
+    file_bytes = io.BytesIO(output.getvalue().encode("utf-8"))
+    file_bytes.name = f"booking_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+
+    await update.message.reply_document(
+        document=file_bytes,
+        filename=file_bytes.name,
+        caption=f"Data export: {len(data_booking)} booking total"
+    )
+
+
+async def export_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler khusus admin: /export - kirim data booking sebagai file CSV"""
+    admin_id = os.getenv("ADMIN_TELEGRAM_ID")
+    pengirim_id = str(update.effective_user.id)
+
+    if pengirim_id != admin_id:
+        await update.message.reply_text("Maaf, perintah ini hanya untuk admin.")
+        return
+
+    data_booking = get_semua_bookings()
+
+    if not data_booking:
+        await update.message.reply_text("Belum ada data booking untuk di-export.")
+        return
+
+    # Buat file CSV di memori (tidak perlu simpan ke disk)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["ID", "User ID", "Username", "Layanan", "Tanggal", "Status", "Dibuat Pada"])
+    for row in data_booking:
+        writer.writerow(row)
+
+    # Konversi ke bytes supaya bisa dikirim sebagai file
+    output.seek(0)
+    file_bytes = io.BytesIO(output.getvalue().encode("utf-8"))
+    file_bytes.name = f"booking_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+
+    await update.message.reply_document(
+        document=file_bytes,
+        filename=file_bytes.name,
+        caption=f"Data export: {len(data_booking)} booking total"
+    )
+
 def main():
     init_db()  # Buat tabel database kalau belum ada
     init_booking_table()
@@ -497,6 +607,9 @@ def main():
     app.add_handler(booking_conv)   
     app.add_handler(CommandHandler("mybookings", my_bookings))
     app.add_handler(CommandHandler("tanggapi", tanggapi_komplain))
+    app.add_handler(CommandHandler("broadcast", broadcast_handler))
+    app.add_handler(CommandHandler("export", export_handler))
+    app.add_handler(CommandHandler("export", export_handler))
     app.add_handler(CallbackQueryHandler(cancel_booking_handler, pattern="^cancel_"))
     app.add_handler(CallbackQueryHandler(rating_handler, pattern="^rating_"))
     app.add_handler(CommandHandler("start", start))
