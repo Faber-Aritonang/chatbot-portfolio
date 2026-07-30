@@ -251,3 +251,54 @@ def get_riwayat_percakapan_user(user_id, limit=5):
     hasil = cursor.fetchall()
     conn.close()
     return list(reversed(hasil))  # balik urutan supaya dari lama ke baru
+
+
+def init_rating_table():
+    """Membuat tabel rating dan tambah kolom feedback_sent ke bookings"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ratings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            booking_id INTEGER,
+            user_id TEXT,
+            layanan TEXT,
+            rating INTEGER,
+            created_at TEXT
+        )
+    """)
+    try:
+        cursor.execute("ALTER TABLE bookings ADD COLUMN feedback_sent INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    conn.commit()
+    conn.close()
+
+def get_bookings_untuk_feedback(tanggal):
+    """Ambil booking yang jadwalnya kemarin dan belum diminta feedback"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, user_id, layanan, tanggal FROM bookings
+        WHERE tanggal = ? AND status = 'confirmed' AND feedback_sent = 0
+    """, (tanggal,))
+    hasil = cursor.fetchall()
+    conn.close()
+    return hasil
+
+def tandai_feedback_terkirim(booking_id):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE bookings SET feedback_sent = 1 WHERE id = ?", (booking_id,))
+    conn.commit()
+    conn.close()
+
+def save_rating(booking_id, user_id, layanan, rating):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO ratings (booking_id, user_id, layanan, rating, created_at)
+        VALUES (?, ?, ?, ?, ?)
+    """, (booking_id, user_id, layanan, rating, datetime.now().isoformat()))
+    conn.commit()
+    conn.close()

@@ -1,7 +1,7 @@
 import asyncio
 from telegram.error import TimedOut, NetworkError
 from datetime import datetime
-from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal, get_user_bookings, cancel_booking, get_bookings_untuk_reminder, tandai_sudah_diingatkan, init_customer_table, upsert_customer, get_customer, tambah_hitungan_booking, init_complaint_table, save_complaint, get_complaint, update_complaint_status, get_riwayat_percakapan_user
+from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal, get_user_bookings, cancel_booking, get_bookings_untuk_reminder, tandai_sudah_diingatkan, init_customer_table, upsert_customer, get_customer, tambah_hitungan_booking, init_complaint_table, save_complaint, get_complaint, update_complaint_status, get_riwayat_percakapan_user, init_rating_table, get_bookings_untuk_feedback, tandai_feedback_terkirim, save_rating
 import os
 from datetime import datetime, timedelta, time
 from dotenv import load_dotenv
@@ -173,7 +173,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        riwayat = get_riwayat_percakapan_user(user_id, limit=5)
+        riwayat = get_riwayat_percakapan_user, init_rating_table, get_bookings_untuk_feedback, tandai_feedback_terkirim, save_rating(user_id, limit=5)
         messages_untuk_llm = []
         for pesan_lama, balasan_lama in riwayat:
             messages_untuk_llm.append({"role": "user", "content": pesan_lama})
@@ -438,11 +438,50 @@ async def tanggapi_komplain(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"Gagal mengirim tanggapan: {e}")
 
+
+async def kirim_permintaan_feedback(context: ContextTypes.DEFAULT_TYPE):
+    """Dipanggil otomatis setiap hari, minta feedback untuk booking kemarin"""
+    kemarin = (datetime.now() - timedelta(days=1)).strftime("%d-%m-%Y")
+    daftar_booking = get_bookings_untuk_feedback(kemarin)
+
+    for booking_id, user_id, layanan, tanggal in daftar_booking:
+        try:
+            keyboard = [[
+                InlineKeyboardButton("⭐" * i, callback_data=f"rating_{booking_id}_{i}")
+                for i in range(1, 6)
+            ]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=f"Bagaimana pengalaman Anda dengan layanan {layanan} kemarin? Mohon berikan rating:",
+                reply_markup=reply_markup
+            )
+            tandai_feedback_terkirim(booking_id)
+            print(f"Permintaan feedback terkirim untuk booking {booking_id}")
+        except Exception as e:
+            print(f"Gagal kirim feedback untuk booking {booking_id}: {e}")
+
+async def rating_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menangkap klik tombol rating dari user"""
+    query = update.callback_query
+    await query.answer()
+
+    parts = query.data.split("_")
+    booking_id = int(parts[1])
+    rating = int(parts[2])
+    user_id = str(update.effective_user.id)
+
+    # Ambil nama layanan dari booking (opsional, bisa juga ambil dari user_data kalau perlu)
+    save_rating(booking_id, user_id, "N/A", rating)
+
+    await query.edit_message_text(f"Terima kasih atas rating {'⭐' * rating}-nya! 🙏")
+
 def main():
     init_db()  # Buat tabel database kalau belum ada
     init_booking_table()
     init_customer_table()
     init_complaint_table()
+    init_rating_table()
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 # ConversationHandler untuk alur booking
     booking_conv = ConversationHandler(
@@ -459,6 +498,7 @@ def main():
     app.add_handler(CommandHandler("mybookings", my_bookings))
     app.add_handler(CommandHandler("tanggapi", tanggapi_komplain))
     app.add_handler(CallbackQueryHandler(cancel_booking_handler, pattern="^cancel_"))
+    app.add_handler(CallbackQueryHandler(rating_handler, pattern="^rating_"))
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CallbackQueryHandler(button_handler))
@@ -466,6 +506,7 @@ def main():
 # Jalankan pengecekan reminder setiap hari jam 09:00
     
     app.job_queue.run_daily(kirim_reminder, time=time(hour=9, minute=0))
+    app.job_queue.run_daily(kirim_permintaan_feedback, time=time(hour=10, minute=0))
     print("Bot sedang berjalan... Tekan Ctrl+C untuk berhenti.")
     app.run_polling()
 
