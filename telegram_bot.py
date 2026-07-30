@@ -1,7 +1,7 @@
 import asyncio
 from telegram.error import TimedOut, NetworkError
 from datetime import datetime
-from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal, get_user_bookings, cancel_booking, get_bookings_untuk_reminder, tandai_sudah_diingatkan, init_customer_table, upsert_customer, get_customer, tambah_hitungan_booking, init_complaint_table, save_complaint, get_complaint, update_complaint_status
+from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal, get_user_bookings, cancel_booking, get_bookings_untuk_reminder, tandai_sudah_diingatkan, init_customer_table, upsert_customer, get_customer, tambah_hitungan_booking, init_complaint_table, save_complaint, get_complaint, update_complaint_status, get_riwayat_percakapan_user
 import os
 from datetime import datetime, timedelta, time
 from dotenv import load_dotenv
@@ -173,11 +173,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
+        riwayat = get_riwayat_percakapan_user(user_id, limit=5)
+        messages_untuk_llm = []
+        for pesan_lama, balasan_lama in riwayat:
+            messages_untuk_llm.append({"role": "user", "content": pesan_lama})
+            messages_untuk_llm.append({"role": "assistant", "content": balasan_lama})
+        messages_untuk_llm.append({
+            "role": "user",
+            "content": f"Jawab pertanyaan berikut HANYA dalam Bahasa Indonesia, jangan gunakan bahasa lain sama sekali: {user_text}"
+        })
+
         response = llm_client.chat.completions.create(
             model="qwen2.5:7b",
-            messages=[
-                {"role": "user", "content": f"Jawab pertanyaan berikut HANYA dalam Bahasa Indonesia, jangan gunakan bahasa lain sama sekali: {user_text}"}
-            ]
+            messages=messages_untuk_llm
         )
         reply = response.choices[0].message.content
 

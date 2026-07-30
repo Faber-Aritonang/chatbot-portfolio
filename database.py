@@ -237,3 +237,17 @@ def update_complaint_status(complaint_id, status):
     cursor.execute("UPDATE complaints SET status = ? WHERE id = ?", (status, complaint_id))
     conn.commit()
     conn.close()
+
+
+def get_riwayat_percakapan_user(user_id, limit=5):
+    """Ambil beberapa percakapan terakhir milik user tertentu, urut dari lama ke baru"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT message, reply FROM conversations
+        WHERE user_id = ?
+        ORDER BY id DESC LIMIT ?
+    """, (user_id, limit))
+    hasil = cursor.fetchall()
+    conn.close()
+    return list(reversed(hasil))  # balik urutan supaya dari lama ke baru
