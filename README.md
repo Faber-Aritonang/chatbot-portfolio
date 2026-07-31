@@ -22,6 +22,7 @@ Coba Langsung: Bot Telegram — t.me/sidodol_chatbot_bot
 | v2.6 | Rate limiting: mencegah spam dengan batas maksimal 5 pesan per menit per user |
 | v2.7 | Deduplikasi pesan WhatsApp: cegah pemrosesan ganda menggunakan message_id tracking |
 | v2.8 | Backup database: admin dapat mengunduh salinan database via /backup |
+| v3.0 | Migrasi LLM dari Qwen lokal ke Claude Haiku 4.5 (Anthropic): konsistensi bahasa terjamin, kualitas respons lebih baik, siap deployment produksi |
 
 Lihat riwayat lengkap di GitHub Releases/Tags: https://github.com/Faber-Aritonang/chatbot-portfolio/tags
 
@@ -46,11 +47,11 @@ Lihat riwayat lengkap di GitHub Releases/Tags: https://github.com/Faber-Aritonan
 - Message status tracking (sent/delivered/failed)
 - Catatan jujur: Teruji end-to-end untuk penerimaan pesan dan pemrosesan webhook. Pengiriman keluar ke nomor Indonesia saat ini terblokir oleh kebijakan cross-border messaging Meta (error 130497) pada nomor uji coba (sandbox) - ini keterbatasan kebijakan platform, bukan keterbatasan kode.
 
-## Catatan Keterbatasan Model Lokal
+## Riwayat Pemilihan LLM
 
-Bot ini menggunakan Qwen 2.5 7B (via Ollama) sebagai LLM untuk pengembangan tanpa biaya. Sebagai model open-source berukuran kecil yang berjalan di CPU, sesekali dapat mencampur bahasa (misal Bahasa Indonesia dengan Mandarin) terutama pada topik teknis yang kompleks — ini adalah keterbatasan bawaan model, bukan bug pada kode.
+Bot ini awalnya dikembangkan menggunakan Qwen 2.5 7B (via Ollama, lokal) untuk pengembangan tanpa biaya. Sebagai model open-source berukuran kecil, model tersebut sesekali mencampur bahasa pada topik kompleks — bukan bug kode, melainkan keterbatasan bawaan model kecil.
 
-Untuk lingkungan produksi, arsitektur bot ini sudah dirancang agar mudah dipindah ke model cloud (OpenAI atau Anthropic Claude) hanya dengan mengganti `base_url`, API key, dan nama model — tanpa perlu mengubah struktur kode lainnya.
+Sejak v3.0, bot ini bermigrasi ke **Claude Haiku 4.5 (Anthropic)** untuk kualitas dan konsistensi respons yang lebih baik, sekaligus mempersiapkan bot untuk deployment produksi 24/7. Migrasi ini hanya memerlukan perubahan `base_url`, API key, dan nama model — arsitektur kode lainnya tidak berubah, menunjukkan desain yang fleksibel untuk berpindah antar penyedia LLM.
 
 ## Tech Stack
 
