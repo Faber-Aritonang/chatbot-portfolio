@@ -18,8 +18,8 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # Setup koneksi ke Qwen lewat Ollama
 llm_client = OpenAI(
-    base_url="http://localhost:11434/v1",
-    api_key="ollama"
+    base_url="https://api.anthropic.com/v1/",
+    api_key=os.getenv("ANTHROPIC_API_KEY")
 )
 async def kirim_pesan_aman(update_or_query, text, reply_markup=None, max_retry=3):
     """
@@ -215,7 +215,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         })
 
         response = llm_client.chat.completions.create(
-            model="qwen2.5:7b",
+            model="claude-haiku-4-5-20251001",
             messages=messages_untuk_llm
         )
         reply = response.choices[0].message.content
