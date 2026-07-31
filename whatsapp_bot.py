@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request, Query
 from fastapi.responses import PlainTextResponse
 from dotenv import load_dotenv
 from openai import OpenAI
+from database import init_processed_messages_table, sudah_diproses, tandai_sudah_diproses
 
 load_dotenv()
 
@@ -12,6 +13,7 @@ PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
 VERIFY_TOKEN = "jimmy_verify_123"  # bebas, nanti dipakai saat setup webhook di dashboard Meta
 
 app = FastAPI()
+init_processed_messages_table()
 
 llm_client = OpenAI(
     base_url="http://localhost:11434/v1",
@@ -41,8 +43,18 @@ async def receive_message(request: Request):
 
         if "messages" in change:
             message = change["messages"][0]
+            message_id = message.get("id")
+
+            # Cegah pemrosesan duplikat (WhatsApp bisa kirim event yang sama 2x)
+            if message_id and sudah_diproses(message_id):
+                print(f"Pesan {message_id} sudah pernah diproses, dilewati.")
+                return {"status": "ok"}
+
             from_number = message["from"]
             text = message["text"]["body"]
+
+            if message_id:
+                tandai_sudah_diproses(message_id)
 
             print(f"Pesan dari {from_number}: {text}")
 

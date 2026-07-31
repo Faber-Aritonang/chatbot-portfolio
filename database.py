@@ -326,3 +326,37 @@ def get_semua_bookings():
     hasil = cursor.fetchall()
     conn.close()
     return hasil
+
+
+def init_processed_messages_table():
+    """Tabel untuk melacak message_id WhatsApp yang sudah diproses (cegah duplikat)"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS processed_messages (
+            message_id TEXT PRIMARY KEY,
+            processed_at TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def sudah_diproses(message_id):
+    """Cek apakah message_id ini sudah pernah diproses sebelumnya"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT message_id FROM processed_messages WHERE message_id = ?", (message_id,))
+    hasil = cursor.fetchone()
+    conn.close()
+    return hasil is not None
+
+def tandai_sudah_diproses(message_id):
+    """Catat message_id sebagai sudah diproses"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT OR IGNORE INTO processed_messages (message_id, processed_at) VALUES (?, ?)",
+        (message_id, datetime.now().isoformat())
+    )
+    conn.commit()
+    conn.close()
