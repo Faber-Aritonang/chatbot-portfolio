@@ -615,6 +615,30 @@ async def export_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         caption=f"Data export: {len(data_booking)} booking total"
     )
 
+
+async def backup_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler khusus admin: /backup - kirim file database sebagai dokumen"""
+    admin_id = os.getenv("ADMIN_TELEGRAM_ID")
+    pengirim_id = str(update.effective_user.id)
+
+    if pengirim_id != admin_id:
+        await update.message.reply_text("Maaf, perintah ini hanya untuk admin.")
+        return
+
+    db_path = "chatbot.db"
+    if not os.path.exists(db_path):
+        await update.message.reply_text("File database tidak ditemukan.")
+        return
+
+    nama_backup = f"backup_chatbot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+
+    with open(db_path, "rb") as f:
+        await update.message.reply_document(
+            document=f,
+            filename=nama_backup,
+            caption=f"Backup database — {datetime.now().strftime('%d %B %Y, %H:%M')} WIB"
+        )
+
 def main():
     init_db()  # Buat tabel database kalau belum ada
     init_booking_table()
@@ -638,7 +662,9 @@ def main():
     app.add_handler(CommandHandler("tanggapi", tanggapi_komplain))
     app.add_handler(CommandHandler("broadcast", broadcast_handler))
     app.add_handler(CommandHandler("export", export_handler))
+    app.add_handler(CommandHandler("backup", backup_handler))
     app.add_handler(CommandHandler("export", export_handler))
+    app.add_handler(CommandHandler("backup", backup_handler))
     app.add_handler(CallbackQueryHandler(cancel_booking_handler, pattern="^cancel_"))
     app.add_handler(CallbackQueryHandler(rating_handler, pattern="^rating_"))
     app.add_handler(CommandHandler("start", start))
