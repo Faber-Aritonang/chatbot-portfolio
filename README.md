@@ -20,6 +20,8 @@ Coba Langsung: Bot Telegram — t.me/sidodol_chatbot_bot
 | v2.4 | Broadcast: admin dapat mengirim pengumuman ke seluruh pelanggan terdaftar via /broadcast |
 | v2.5 | Export data: admin dapat mengunduh seluruh data booking sebagai file CSV via /export |
 | v2.6 | Rate limiting: mencegah spam dengan batas maksimal 5 pesan per menit per user |
+| v2.7 | Deduplikasi pesan WhatsApp: cegah pemrosesan ganda menggunakan message_id tracking |
+| v2.8 | Backup database: admin dapat mengunduh salinan database via /backup |
 
 Lihat riwayat lengkap di GitHub Releases/Tags: https://github.com/Faber-Aritonang/chatbot-portfolio/tags
 
