@@ -1,6 +1,7 @@
 import asyncio
 import csv
 import io
+from collections import defaultdict
 from telegram.error import TimedOut, NetworkError
 from datetime import datetime
 from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal, get_user_bookings, cancel_booking, get_bookings_untuk_reminder, tandai_sudah_diingatkan, init_customer_table, upsert_customer, get_customer, tambah_hitungan_booking, init_complaint_table, save_complaint, get_complaint, update_complaint_status, get_riwayat_percakapan_user, init_rating_table, get_bookings_untuk_feedback, tandai_feedback_terkirim, save_rating, get_all_customer_ids, get_semua_bookings
@@ -123,10 +124,38 @@ def deteksi_intent(teks: str) -> str:
 
     return "umum"
 
+
+# Rate limiting: lacak waktu pesan per user (in-memory, reset kalau bot di-restart)
+riwayat_waktu_pesan = defaultdict(list)
+MAX_PESAN_PER_MENIT = 5
+
+def cek_rate_limit(user_id: str) -> bool:
+    """Return True kalau user masih boleh kirim pesan, False kalau kena limit"""
+    sekarang = datetime.now()
+    satu_menit_lalu = sekarang - timedelta(minutes=1)
+
+    # Buang catatan waktu yang sudah lebih dari 1 menit
+    riwayat_waktu_pesan[user_id] = [
+        waktu for waktu in riwayat_waktu_pesan[user_id] if waktu > satu_menit_lalu
+    ]
+
+    if len(riwayat_waktu_pesan[user_id]) >= MAX_PESAN_PER_MENIT:
+        return False
+
+    riwayat_waktu_pesan[user_id].append(sekarang)
+    return True
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
     user_id = str(update.effective_user.id)
     username = update.effective_user.username or "unknown"
+
+    # Rate limiting: cegah 1 user spam terlalu banyak pesan
+    if not cek_rate_limit(user_id):
+        await update.message.reply_text(
+            "Anda mengirim pesan terlalu cepat. Mohon tunggu sebentar sebelum kirim pesan lagi 🙏"
+        )
+        return
 
     # Fallback sederhana: kalau pesan terlalu pendek/tidak jelas
     if len(user_text.strip()) < 2:
