@@ -2,7 +2,7 @@
 
 Bot Telegram dan WhatsApp yang terintegrasi dengan LLM (Qwen 2.5 7B via Ollama), dengan fitur booking/appointment lengkap: dialogue state management, validasi input, cek ketersediaan jadwal, manajemen booking, dan reminder otomatis.
 
-Coba Langsung: Bot Telegram — t.me/sidodol_chatbot_bot
+Coba Langsung: Bot Telegram — t.me/sidodol_chatbot_bot (live 24/7, di-deploy di Render)
 
 ## Riwayat Versi
 
@@ -23,6 +23,8 @@ Coba Langsung: Bot Telegram — t.me/sidodol_chatbot_bot
 | v2.7 | Deduplikasi pesan WhatsApp: cegah pemrosesan ganda menggunakan message_id tracking |
 | v2.8 | Backup database: admin dapat mengunduh salinan database via /backup |
 | v3.0 | Migrasi LLM dari Qwen lokal ke Claude Haiku 4.5 (Anthropic): konsistensi bahasa terjamin, kualitas respons lebih baik, siap deployment produksi |
+| v3.1 | Sistem whitelist: kontrol akses user via /izinkan dan /cabut, penting untuk deployment demo dengan budget token terkendali |
+| v3.2 | Deploy sukses ke Render (free tier): bot Telegram hidup 24/7 via webhook, terverifikasi berfungsi end-to-end di server produksi |
 | v3.1 | Sistem whitelist: kontrol akses user via /izinkan dan /cabut, penting untuk deployment demo dengan budget token terkendali |
 
 Lihat riwayat lengkap di GitHub Releases/Tags: https://github.com/Faber-Aritonang/chatbot-portfolio/tags
