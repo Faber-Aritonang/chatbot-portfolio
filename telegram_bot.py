@@ -4,7 +4,7 @@ import io
 from collections import defaultdict
 from telegram.error import TimedOut, NetworkError
 from datetime import datetime
-from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal, get_user_bookings, cancel_booking, get_bookings_untuk_reminder, tandai_sudah_diingatkan, init_customer_table, upsert_customer, get_customer, tambah_hitungan_booking, init_complaint_table, save_complaint, get_complaint, update_complaint_status, get_riwayat_percakapan_user, init_rating_table, get_bookings_untuk_feedback, tandai_feedback_terkirim, save_rating, get_all_customer_ids, get_semua_bookings
+from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal, get_user_bookings, cancel_booking, get_bookings_untuk_reminder, tandai_sudah_diingatkan, init_customer_table, upsert_customer, get_customer, tambah_hitungan_booking, init_complaint_table, save_complaint, get_complaint, update_complaint_status, get_riwayat_percakapan_user, init_rating_table, get_bookings_untuk_feedback, tandai_feedback_terkirim, save_rating, get_all_customer_ids, get_semua_bookings, init_allowed_users_table, is_user_allowed, add_allowed_user, remove_allowed_user, init_allowed_users_table, is_user_allowed, add_allowed_user, remove_allowed_user, init_allowed_users_table, is_user_allowed, add_allowed_user, remove_allowed_user
 import os
 from datetime import datetime, timedelta, time
 from dotenv import load_dotenv
@@ -150,6 +150,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     username = update.effective_user.username or "unknown"
 
+    # Whitelist: hanya user yang diizinkan admin yang boleh pakai bot
+    admin_id = os.getenv("ADMIN_TELEGRAM_ID")
+    if user_id != admin_id and not is_user_allowed(user_id):
+        await update.message.reply_text(
+            "Maaf, bot ini masih dalam tahap demo terbatas. Silakan hubungi admin untuk mendapatkan akses. 🙏"
+        )
+        return
+
+    # Whitelist: hanya user yang diizinkan admin yang boleh pakai bot
+    admin_id = os.getenv("ADMIN_TELEGRAM_ID")
+    if user_id != admin_id and not is_user_allowed(user_id):
+        await update.message.reply_text(
+            "Maaf, bot ini masih dalam tahap demo terbatas. Silakan hubungi admin untuk mendapatkan akses. 🙏"
+        )
+        return
+
+    # Whitelist: hanya user yang diizinkan admin yang boleh pakai bot
+    admin_id = os.getenv("ADMIN_TELEGRAM_ID")
+    if user_id != admin_id and not is_user_allowed(user_id):
+        await update.message.reply_text(
+            "Maaf, bot ini masih dalam tahap demo terbatas. Silakan hubungi admin untuk mendapatkan akses. 🙏"
+        )
+        return
+
     # Rate limiting: cegah 1 user spam terlalu banyak pesan
     if not cek_rate_limit(user_id):
         await update.message.reply_text(
@@ -239,6 +263,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Mulai alur booking
 async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    admin_id = os.getenv("ADMIN_TELEGRAM_ID")
+    if user_id != admin_id and not is_user_allowed(user_id):
+        await update.message.reply_text(
+            "Maaf, bot ini masih dalam tahap demo terbatas. Silakan hubungi admin untuk mendapatkan akses. 🙏"
+        )
+        return ConversationHandler.END
+
     keyboard = [
         [InlineKeyboardButton("💇 Potong Rambut", callback_data="potong_rambut")],
         [InlineKeyboardButton("💆 Pijat/Spa", callback_data="pijat_spa")],
@@ -639,12 +671,51 @@ async def backup_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption=f"Backup database — {datetime.now().strftime('%d %B %Y, %H:%M')} WIB"
         )
 
+
+async def izinkan_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler khusus admin: /izinkan <user_id> - tambah user ke whitelist"""
+    admin_id = os.getenv("ADMIN_TELEGRAM_ID")
+    pengirim_id = str(update.effective_user.id)
+
+    if pengirim_id != admin_id:
+        await update.message.reply_text("Maaf, perintah ini hanya untuk admin.")
+        return
+
+    if not context.args:
+        await update.message.reply_text("Format: /izinkan <user_id>")
+        return
+
+    target_user_id = context.args[0]
+    add_allowed_user(target_user_id, "unknown")
+    await update.message.reply_text(f"✅ User {target_user_id} sekarang diizinkan menggunakan bot.")
+
+async def cabut_izin_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler khusus admin: /cabut <user_id> - hapus user dari whitelist"""
+    admin_id = os.getenv("ADMIN_TELEGRAM_ID")
+    pengirim_id = str(update.effective_user.id)
+
+    if pengirim_id != admin_id:
+        await update.message.reply_text("Maaf, perintah ini hanya untuk admin.")
+        return
+
+    if not context.args:
+        await update.message.reply_text("Format: /cabut <user_id>")
+        return
+
+    target_user_id = context.args[0]
+    berhasil = remove_allowed_user(target_user_id)
+    if berhasil:
+        await update.message.reply_text(f"✅ Akses user {target_user_id} berhasil dicabut.")
+    else:
+        await update.message.reply_text(f"User {target_user_id} tidak ditemukan di whitelist.")
+
 def main():
     init_db()  # Buat tabel database kalau belum ada
     init_booking_table()
     init_customer_table()
     init_complaint_table()
     init_rating_table()
+    init_allowed_users_table()
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 # ConversationHandler untuk alur booking
     booking_conv = ConversationHandler(
@@ -663,8 +734,12 @@ def main():
     app.add_handler(CommandHandler("broadcast", broadcast_handler))
     app.add_handler(CommandHandler("export", export_handler))
     app.add_handler(CommandHandler("backup", backup_handler))
+    app.add_handler(CommandHandler("izinkan", izinkan_user))
+    app.add_handler(CommandHandler("cabut", cabut_izin_user))
     app.add_handler(CommandHandler("export", export_handler))
     app.add_handler(CommandHandler("backup", backup_handler))
+    app.add_handler(CommandHandler("izinkan", izinkan_user))
+    app.add_handler(CommandHandler("cabut", cabut_izin_user))
     app.add_handler(CallbackQueryHandler(cancel_booking_handler, pattern="^cancel_"))
     app.add_handler(CallbackQueryHandler(rating_handler, pattern="^rating_"))
     app.add_handler(CommandHandler("start", start))

@@ -360,3 +360,48 @@ def tandai_sudah_diproses(message_id):
     )
     conn.commit()
     conn.close()
+
+
+def init_allowed_users_table():
+    """Tabel whitelist user yang diizinkan memakai bot"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS allowed_users (
+            user_id TEXT PRIMARY KEY,
+            username TEXT,
+            added_at TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def is_user_allowed(user_id):
+    """Cek apakah user_id ada di whitelist"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id FROM allowed_users WHERE user_id = ?", (user_id,))
+    hasil = cursor.fetchone()
+    conn.close()
+    return hasil is not None
+
+def add_allowed_user(user_id, username):
+    """Tambahkan user ke whitelist"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT OR IGNORE INTO allowed_users (user_id, username, added_at) VALUES (?, ?, ?)",
+        (user_id, username, datetime.now().isoformat())
+    )
+    conn.commit()
+    conn.close()
+
+def remove_allowed_user(user_id):
+    """Hapus user dari whitelist"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM allowed_users WHERE user_id = ?", (user_id,))
+    berhasil = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return berhasil
