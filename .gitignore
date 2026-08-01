@@ -5,3 +5,4 @@ __pycache__/
 *.save
 *.gpg
 *.db
+telegram_bot_backup_polling.py

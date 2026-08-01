@@ -709,51 +709,71 @@ async def cabut_izin_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(f"User {target_user_id} tidak ditemukan di whitelist.")
 
-def main():
-    init_db()  # Buat tabel database kalau belum ada
-    init_booking_table()
-    init_customer_table()
-    init_complaint_table()
-    init_rating_table()
-    init_allowed_users_table()
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
-# ConversationHandler untuk alur booking
-    booking_conv = ConversationHandler(
-        entry_points=[CommandHandler("booking", booking_start)],
-        states={
-            PILIH_LAYANAN: [CallbackQueryHandler(layanan_dipilih)],
-            INPUT_TANGGAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, tanggal_diterima)],
-            KONFIRMASI: [CallbackQueryHandler(konfirmasi_booking)],
-        },
-        fallbacks=[CommandHandler("cancel", batal_booking)],
-    )
-   
-    app.add_handler(booking_conv)   
-    app.add_handler(CommandHandler("mybookings", my_bookings))
-    app.add_handler(CommandHandler("tanggapi", tanggapi_komplain))
-    app.add_handler(CommandHandler("broadcast", broadcast_handler))
-    app.add_handler(CommandHandler("export", export_handler))
-    app.add_handler(CommandHandler("backup", backup_handler))
-    app.add_handler(CommandHandler("izinkan", izinkan_user))
-    app.add_handler(CommandHandler("cabut", cabut_izin_user))
-    app.add_handler(CommandHandler("export", export_handler))
-    app.add_handler(CommandHandler("backup", backup_handler))
-    app.add_handler(CommandHandler("izinkan", izinkan_user))
-    app.add_handler(CommandHandler("cabut", cabut_izin_user))
-    app.add_handler(CallbackQueryHandler(cancel_booking_handler, pattern="^cancel_"))
-    app.add_handler(CallbackQueryHandler(rating_handler, pattern="^rating_"))
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CallbackQueryHandler(button_handler))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-# Jalankan pengecekan reminder setiap hari jam 09:00
-    
-    app.job_queue.run_daily(kirim_reminder, time=time(hour=9, minute=0))
-    app.job_queue.run_daily(kirim_permintaan_feedback, time=time(hour=10, minute=0))
-    print("Bot sedang berjalan... Tekan Ctrl+C untuk berhenti.")
-    app.run_polling()
 
-if __name__ == "__main__":
-    main()
+# ── Setup aplikasi Telegram (mode webhook, bukan polling) ──
+telegram_app = Application.builder().updater(None).token(TELEGRAM_TOKEN).build()
 
+init_db()
+init_booking_table()
+init_customer_table()
+init_complaint_table()
+init_rating_table()
+init_allowed_users_table()
 
+booking_conv = ConversationHandler(
+    entry_points=[CommandHandler("booking", booking_start)],
+    states={
+        PILIH_LAYANAN: [CallbackQueryHandler(layanan_dipilih)],
+        INPUT_TANGGAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, tanggal_diterima)],
+        KONFIRMASI: [CallbackQueryHandler(konfirmasi_booking)],
+    },
+    fallbacks=[CommandHandler("cancel", batal_booking)],
+)
+
+telegram_app.add_handler(booking_conv)
+telegram_app.add_handler(CommandHandler("mybookings", my_bookings))
+telegram_app.add_handler(CommandHandler("tanggapi", tanggapi_komplain))
+telegram_app.add_handler(CommandHandler("broadcast", broadcast_handler))
+telegram_app.add_handler(CommandHandler("export", export_handler))
+telegram_app.add_handler(CommandHandler("backup", backup_handler))
+telegram_app.add_handler(CommandHandler("izinkan", izinkan_user))
+telegram_app.add_handler(CommandHandler("cabut", cabut_izin_user))
+telegram_app.add_handler(CallbackQueryHandler(cancel_booking_handler, pattern="^cancel_"))
+telegram_app.add_handler(CallbackQueryHandler(rating_handler, pattern="^rating_"))
+telegram_app.add_handler(CommandHandler("start", start))
+telegram_app.add_handler(CommandHandler("help", help_command))
+telegram_app.add_handler(CallbackQueryHandler(button_handler))
+telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+telegram_app.job_queue.run_daily(kirim_reminder, time=time(hour=9, minute=0))
+telegram_app.job_queue.run_daily(kirim_permintaan_feedback, time=time(hour=10, minute=0))
+
+# ── Server FastAPI untuk terima webhook dari Telegram ──
+from fastapi import FastAPI, Request
+from contextlib import asynccontextmanager
+
+RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    if RENDER_URL:
+        webhook_url = f"{RENDER_URL}/telegram-webhook"
+        await telegram_app.bot.setWebhook(webhook_url)
+        print(f"Webhook terdaftar: {webhook_url}")
+    async with telegram_app:
+        await telegram_app.start()
+        yield
+        await telegram_app.stop()
+
+web_app = FastAPI(lifespan=lifespan)
+
+@web_app.post("/telegram-webhook")
+async def telegram_webhook(request: Request):
+    data = await request.json()
+    update = Update.de_json(data, telegram_app.bot)
+    await telegram_app.process_update(update)
+    return {"status": "ok"}
+
+@web_app.get("/health")
+async def health():
+    return {"status": "bot berjalan"}
