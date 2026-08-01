@@ -23,6 +23,7 @@ Coba Langsung: Bot Telegram — t.me/sidodol_chatbot_bot
 | v2.7 | Deduplikasi pesan WhatsApp: cegah pemrosesan ganda menggunakan message_id tracking |
 | v2.8 | Backup database: admin dapat mengunduh salinan database via /backup |
 | v3.0 | Migrasi LLM dari Qwen lokal ke Claude Haiku 4.5 (Anthropic): konsistensi bahasa terjamin, kualitas respons lebih baik, siap deployment produksi |
+| v3.1 | Sistem whitelist: kontrol akses user via /izinkan dan /cabut, penting untuk deployment demo dengan budget token terkendali |
 
 Lihat riwayat lengkap di GitHub Releases/Tags: https://github.com/Faber-Aritonang/chatbot-portfolio/tags
 
@@ -62,6 +63,14 @@ Sejak v3.0, bot ini bermigrasi ke **Claude Haiku 4.5 (Anthropic)** untuk kualita
 - LLM: Qwen 2.5 7B (lokal via Ollama) - kompatibel dengan OpenAI/Anthropic API untuk deployment produksi
 - Database: SQLite (riwayat percakapan, data booking)
 - Tunneling: ngrok (untuk pengembangan webhook lokal)
+
+## Strategi Akses Terbatas (Demo Mode)
+
+Bot ini menerapkan sistem whitelist untuk mengontrol siapa saja yang bisa menggunakan fitur AI-nya — penting saat bot di-deploy publik (24/7) namun masih menggunakan budget token pribadi untuk keperluan presentasi produk, bukan operasional bisnis penuh.
+
+- User baru yang belum diizinkan akan menerima pesan "demo terbatas, hubungi admin"
+- Admin dapat menambahkan akses dengan `/izinkan <user_id>` dan mencabutnya dengan `/cabut <user_id>`
+- Pendekatan ini memungkinkan bot didemokan ke calon klien secara terkendali tanpa risiko penyalahgunaan token API
 
 ## Setup
 
