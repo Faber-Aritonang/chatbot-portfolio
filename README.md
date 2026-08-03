@@ -25,6 +25,7 @@ Coba Langsung: Bot Telegram — t.me/sidodol_chatbot_bot (live 24/7, di-deploy d
 | v3.0 | Migrasi LLM dari Qwen lokal ke Claude Haiku 4.5 (Anthropic): konsistensi bahasa terjamin, kualitas respons lebih baik, siap deployment produksi |
 | v3.1 | Sistem whitelist: kontrol akses user via /izinkan dan /cabut, penting untuk deployment demo dengan budget token terkendali |
 | v3.2 | Deploy sukses ke Render (free tier): bot Telegram hidup 24/7 via webhook, terverifikasi berfungsi end-to-end di server produksi |
+| v3.3 | Dashboard analitik dengan grafik interaktif (Chart.js): ringkasan bisnis, layanan terpopuler, tren booking, rating, status komplain — terverifikasi real-time di production |
 
 Lihat riwayat lengkap di GitHub Releases/Tags: https://github.com/Faber-Aritonang/chatbot-portfolio/tags
 
