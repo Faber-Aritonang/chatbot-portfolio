@@ -783,17 +783,63 @@ async def health():
     return {"status": "bot berjalan"}
 
 
+def generate_insight(ringkasan, booking_per_layanan, rating_per_layanan, komplain_per_status):
+    """Minta LLM merangkum data dashboard jadi insight bahasa manusia"""
+    data_text = f"""
+Data bisnis saat ini:
+- Total booking: {ringkasan['total_booking']}
+- Total pelanggan: {ringkasan['total_pelanggan']}
+- Komplain belum ditanggapi: {ringkasan['komplain_belum_ditanggapi']}
+- Rating rata-rata: {ringkasan['rating_rata_rata']}
+- Booking per layanan: {booking_per_layanan}
+- Rating per layanan: {rating_per_layanan}
+- Status komplain: {komplain_per_status}
+"""
+    try:
+        response = llm_client.chat.completions.create(
+            model=os.getenv("INSIGHT_LLM_MODEL", "claude-haiku-4-5-20251001"),
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Kamu adalah analis bisnis. Berdasarkan data yang diberikan, tulis 2-4 kalimat "
+                        "insight singkat dan actionable dalam Bahasa Indonesia untuk pemilik bisnis. "
+                        "Fokus ke hal yang perlu perhatian (misal komplain belum ditanggapi, layanan "
+                        "terpopuler, atau rating rendah). Kalau data terlalu sedikit untuk disimpulkan, "
+                        "katakan itu apa adanya. Jangan mengarang angka yang tidak ada di data."
+                    ),
+                },
+                {"role": "user", "content": data_text},
+            ],
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"Gagal generate insight: {e}")
+        return "Insight tidak tersedia saat ini (gangguan sistem)."
+
+
 @web_app.get("/api/dashboard-data")
-async def dashboard_data(token: str = ""):
+async def dashboard_data(token: str = "", with_insight: str = "false"):
     if token != os.getenv("DASHBOARD_TOKEN"):
         return {"error": "Token tidak valid"}
-    return {
-        "ringkasan": get_ringkasan_stats(),
-        "booking_per_layanan": get_booking_per_layanan(),
+
+    ringkasan = get_ringkasan_stats()
+    booking_per_layanan = get_booking_per_layanan()
+    rating_per_layanan = get_rating_rata_rata_per_layanan()
+    komplain_per_status = get_complaint_counts_by_status()
+
+    hasil = {
+        "ringkasan": ringkasan,
+        "booking_per_layanan": booking_per_layanan,
         "booking_trend": get_booking_trend(30),
-        "rating_per_layanan": get_rating_rata_rata_per_layanan(),
-        "komplain_per_status": get_complaint_counts_by_status(),
+        "rating_per_layanan": rating_per_layanan,
+        "komplain_per_status": komplain_per_status,
     }
+
+    if with_insight == "true":
+        hasil["insight"] = generate_insight(ringkasan, booking_per_layanan, rating_per_layanan, komplain_per_status)
+
+    return hasil
 
 
 @web_app.get("/dashboard")
@@ -828,6 +874,12 @@ async def dashboard_page(token: str = ""):
         <div class="subtitle">Data sejak deploy terakhir (tier gratis tidak menyimpan riwayat permanen antar-deploy)</div>
 
         <div class="cards" id="cards"></div>
+
+        <div class="chart-box" style="margin-bottom:16px;">
+            <h3>🤖 Insight Bisnis (AI)</h3>
+            <div id="insightText" style="color:#666; font-size:14px; margin-bottom:12px;">Klik tombol di bawah untuk minta AI merangkum kondisi bisnis Anda saat ini.</div>
+            <button id="btnInsight" style="background:#4f8ef7; color:white; border:none; padding:10px 18px; border-radius:8px; cursor:pointer; font-size:14px;">✨ Generate Insight</button>
+        </div>
 
         <div class="charts">
             <div class="chart-box"><h3>Layanan Terpopuler</h3><canvas id="chartLayanan"></canvas></div>
@@ -872,6 +924,27 @@ async def dashboard_page(token: str = ""):
                     data: {{ labels: data.komplain_per_status.map(x => x[0]), datasets: [{{ data: data.komplain_per_status.map(x => x[1]), backgroundColor: ['#ff3b30', '#34c759'] }}] }}
                 }});
             }});
+
+        document.getElementById('btnInsight').addEventListener('click', function() {{
+            const btn = this;
+            const teksDiv = document.getElementById('insightText');
+            btn.disabled = true;
+            btn.textContent = 'Menganalisis...';
+            teksDiv.textContent = 'Mohon tunggu, AI sedang menganalisis data...';
+
+            fetch(window.location.pathname.replace('/dashboard', '/api/dashboard-data') + window.location.search + '&with_insight=true')
+                .then(r => r.json())
+                .then(data => {{
+                    teksDiv.textContent = data.insight || 'Insight tidak tersedia.';
+                    btn.disabled = false;
+                    btn.textContent = '✨ Generate Ulang';
+                }})
+                .catch(() => {{
+                    teksDiv.textContent = 'Gagal memuat insight. Coba lagi.';
+                    btn.disabled = false;
+                    btn.textContent = '✨ Generate Insight';
+                }});
+        }});
         </script>
     </body>
     </html>
