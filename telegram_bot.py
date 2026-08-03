@@ -4,7 +4,7 @@ import io
 from collections import defaultdict
 from telegram.error import TimedOut, NetworkError
 from datetime import datetime
-from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal, get_user_bookings, cancel_booking, get_bookings_untuk_reminder, tandai_sudah_diingatkan, init_customer_table, upsert_customer, get_customer, tambah_hitungan_booking, init_complaint_table, save_complaint, get_complaint, update_complaint_status, get_riwayat_percakapan_user, init_rating_table, get_bookings_untuk_feedback, tandai_feedback_terkirim, save_rating, get_all_customer_ids, get_semua_bookings, init_allowed_users_table, is_user_allowed, add_allowed_user, remove_allowed_user, init_allowed_users_table, is_user_allowed, add_allowed_user, remove_allowed_user, init_allowed_users_table, is_user_allowed, add_allowed_user, remove_allowed_user
+from database import init_db, save_conversation, init_booking_table, save_booking, hitung_booking_pada_tanggal, get_user_bookings, cancel_booking, get_bookings_untuk_reminder, tandai_sudah_diingatkan, init_customer_table, upsert_customer, get_customer, tambah_hitungan_booking, init_complaint_table, save_complaint, get_complaint, update_complaint_status, get_riwayat_percakapan_user, init_rating_table, get_bookings_untuk_feedback, tandai_feedback_terkirim, save_rating, get_all_customer_ids, get_semua_bookings, init_allowed_users_table, is_user_allowed, add_allowed_user, remove_allowed_user, get_booking_per_layanan, get_booking_trend, get_rating_rata_rata_per_layanan, get_complaint_counts_by_status, get_ringkasan_stats
 import os
 from datetime import datetime, timedelta, time
 from dotenv import load_dotenv
@@ -528,17 +528,21 @@ async def rating_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menangkap klik tombol rating dari user"""
     query = update.callback_query
     await query.answer()
-
     parts = query.data.split("_")
     booking_id = int(parts[1])
     rating = int(parts[2])
     user_id = str(update.effective_user.id)
 
-    # Ambil nama layanan dari booking (opsional, bisa juga ambil dari user_data kalau perlu)
-    save_rating(booking_id, user_id, "N/A", rating)
+    # Ambil nama layanan sungguhan dari data booking, bukan placeholder "N/A"
+    semua_booking = get_semua_bookings()
+    layanan = "Tidak diketahui"
+    for row in semua_booking:
+        if row[0] == booking_id:
+            layanan = row[3]
+            break
 
+    save_rating(booking_id, user_id, layanan, rating)
     await query.edit_message_text(f"Terima kasih atas rating {'⭐' * rating}-nya! 🙏")
-
 
 async def broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler khusus admin: /broadcast <pesan> - kirim ke semua pelanggan"""
@@ -777,3 +781,99 @@ async def telegram_webhook(request: Request):
 @web_app.get("/health")
 async def health():
     return {"status": "bot berjalan"}
+
+
+@web_app.get("/api/dashboard-data")
+async def dashboard_data(token: str = ""):
+    if token != os.getenv("DASHBOARD_TOKEN"):
+        return {"error": "Token tidak valid"}
+    return {
+        "ringkasan": get_ringkasan_stats(),
+        "booking_per_layanan": get_booking_per_layanan(),
+        "booking_trend": get_booking_trend(30),
+        "rating_per_layanan": get_rating_rata_rata_per_layanan(),
+        "komplain_per_status": get_complaint_counts_by_status(),
+    }
+
+
+@web_app.get("/dashboard")
+async def dashboard_page(token: str = ""):
+    from fastapi.responses import HTMLResponse
+    if token != os.getenv("DASHBOARD_TOKEN"):
+        return HTMLResponse("<h2>Akses ditolak. Token tidak valid.</h2>", status_code=403)
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>Dashboard - Sidodol Chatbot</title>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+        <style>
+            body {{ font-family: -apple-system, sans-serif; background: #f5f5f7; margin: 0; padding: 24px; color: #1a1a1a; }}
+            h1 {{ font-size: 22px; margin-bottom: 4px; }}
+            .subtitle {{ color: #666; margin-bottom: 24px; font-size: 14px; }}
+            .cards {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }}
+            .card {{ background: white; border-radius: 12px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }}
+            .card .label {{ font-size: 13px; color: #666; margin-bottom: 6px; }}
+            .card .value {{ font-size: 28px; font-weight: 700; }}
+            .charts {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }}
+            .chart-box {{ background: white; border-radius: 12px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }}
+            .chart-box h3 {{ font-size: 15px; margin-top: 0; }}
+            canvas {{ max-height: 260px; }}
+        </style>
+    </head>
+    <body>
+        <h1>📊 Dashboard — Sidodol Chatbot</h1>
+        <div class="subtitle">Data sejak deploy terakhir (tier gratis tidak menyimpan riwayat permanen antar-deploy)</div>
+
+        <div class="cards" id="cards"></div>
+
+        <div class="charts">
+            <div class="chart-box"><h3>Layanan Terpopuler</h3><canvas id="chartLayanan"></canvas></div>
+            <div class="chart-box"><h3>Tren Booking (30 Hari)</h3><canvas id="chartTren"></canvas></div>
+            <div class="chart-box"><h3>Rating Rata-rata per Layanan</h3><canvas id="chartRating"></canvas></div>
+            <div class="chart-box"><h3>Status Komplain</h3><canvas id="chartKomplain"></canvas></div>
+        </div>
+
+        <script>
+        fetch(window.location.pathname.replace('/dashboard', '/api/dashboard-data') + window.location.search)
+            .then(r => r.json())
+            .then(data => {{
+                const cardsDiv = document.getElementById('cards');
+                const r = data.ringkasan;
+                cardsDiv.innerHTML = `
+                    <div class="card"><div class="label">Total Booking</div><div class="value">${{r.total_booking}}</div></div>
+                    <div class="card"><div class="label">Total Pelanggan</div><div class="value">${{r.total_pelanggan}}</div></div>
+                    <div class="card"><div class="label">Komplain Belum Ditanggapi</div><div class="value">${{r.komplain_belum_ditanggapi}}</div></div>
+                    <div class="card"><div class="label">Rating Rata-rata</div><div class="value">${{r.rating_rata_rata}} ⭐</div></div>
+                `;
+
+                new Chart(document.getElementById('chartLayanan'), {{
+                    type: 'bar',
+                    data: {{ labels: data.booking_per_layanan.map(x => x[0]), datasets: [{{ label: 'Jumlah Booking', data: data.booking_per_layanan.map(x => x[1]), backgroundColor: '#4f8ef7' }}] }},
+                    options: {{ plugins: {{ legend: {{ display: false }} }} }}
+                }});
+
+                new Chart(document.getElementById('chartTren'), {{
+                    type: 'line',
+                    data: {{ labels: data.booking_trend.map(x => x[0]), datasets: [{{ label: 'Booking per Hari', data: data.booking_trend.map(x => x[1]), borderColor: '#34c759', tension: 0.3 }}] }},
+                    options: {{ plugins: {{ legend: {{ display: false }} }} }}
+                }});
+
+                new Chart(document.getElementById('chartRating'), {{
+                    type: 'bar',
+                    data: {{ labels: data.rating_per_layanan.map(x => x[0]), datasets: [{{ label: 'Rating', data: data.rating_per_layanan.map(x => x[1]), backgroundColor: '#ff9500' }}] }},
+                    options: {{ plugins: {{ legend: {{ display: false }} }}, scales: {{ y: {{ max: 5 }} }} }}
+                }});
+
+                new Chart(document.getElementById('chartKomplain'), {{
+                    type: 'doughnut',
+                    data: {{ labels: data.komplain_per_status.map(x => x[0]), datasets: [{{ data: data.komplain_per_status.map(x => x[1]), backgroundColor: ['#ff3b30', '#34c759'] }}] }}
+                }});
+            }});
+        </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(html)

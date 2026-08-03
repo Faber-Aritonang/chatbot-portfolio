@@ -405,3 +405,81 @@ def remove_allowed_user(user_id):
     conn.commit()
     conn.close()
     return berhasil
+
+
+def get_booking_per_layanan():
+    """Hitung jumlah booking confirmed per layanan, untuk grafik populeritas"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT layanan, COUNT(*) as jumlah
+        FROM bookings
+        WHERE status = 'confirmed'
+        GROUP BY layanan
+        ORDER BY jumlah DESC
+    """)
+    hasil = cursor.fetchall()
+    conn.close()
+    return hasil
+
+def get_booking_trend(hari=30):
+    """Tren jumlah booking dibuat per tanggal, N hari terakhir"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT DATE(created_at) as tgl, COUNT(*) as jumlah
+        FROM bookings
+        WHERE created_at >= DATE('now', ?)
+        GROUP BY tgl
+        ORDER BY tgl ASC
+    """, (f'-{hari} days',))
+    hasil = cursor.fetchall()
+    conn.close()
+    return hasil
+
+def get_rating_rata_rata_per_layanan():
+    """Rata-rata rating per layanan"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT layanan, ROUND(AVG(rating), 2) as rata_rata, COUNT(*) as jumlah_rating
+        FROM ratings
+        GROUP BY layanan
+        ORDER BY rata_rata DESC
+    """)
+    hasil = cursor.fetchall()
+    conn.close()
+    return hasil
+
+def get_complaint_counts_by_status():
+    """Jumlah komplain per status (baru vs ditanggapi)"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT status, COUNT(*) as jumlah
+        FROM complaints
+        GROUP BY status
+    """)
+    hasil = cursor.fetchall()
+    conn.close()
+    return hasil
+
+def get_ringkasan_stats():
+    """Angka ringkasan untuk kartu statistik di dashboard"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM bookings WHERE status='confirmed'")
+    total_booking = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM customers")
+    total_pelanggan = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM complaints WHERE status='baru'")
+    komplain_belum_ditanggapi = cursor.fetchone()[0]
+    cursor.execute("SELECT ROUND(AVG(rating), 2) FROM ratings")
+    rating_rata_rata = cursor.fetchone()[0] or 0
+    conn.close()
+    return {
+        "total_booking": total_booking,
+        "total_pelanggan": total_pelanggan,
+        "komplain_belum_ditanggapi": komplain_belum_ditanggapi,
+        "rating_rata_rata": rating_rata_rata,
+    }
