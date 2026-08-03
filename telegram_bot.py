@@ -806,7 +806,10 @@ Data bisnis saat ini:
                         "insight singkat dan actionable dalam Bahasa Indonesia untuk pemilik bisnis. "
                         "Fokus ke hal yang perlu perhatian (misal komplain belum ditanggapi, layanan "
                         "terpopuler, atau rating rendah). Kalau data terlalu sedikit untuk disimpulkan, "
-                        "katakan itu apa adanya. Jangan mengarang angka yang tidak ada di data."
+                        "katakan itu apa adanya. Jangan mengarang angka yang tidak ada di data. "
+                        "PENTING: Tulis sebagai teks polos/plain text saja — JANGAN gunakan markdown "
+                        "sama sekali (tidak ada tanda bintang **, tidak ada tanda pagar #, tidak ada "
+                        "format heading atau bold apapun)."
                     ),
                 },
                 {"role": "user", "content": data_text},
