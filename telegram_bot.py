@@ -65,9 +65,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Sapaan berbeda untuk pelanggan lama vs baru
     if customer and customer[3] > 0:  # total_booking > 0
-        pesan_sapaan = f"Halo lagi! Senang bertemu Anda kembali 😊 (booking Anda sejauh ini: {customer[3]}x)"
+        pesan_sapaan = (
+            f"Selamat datang kembali! 👋\n\n"
+            f"Senang bisa melayani Anda lagi — tercatat Anda sudah {customer[3]}x menggunakan layanan kami. "
+            f"Terima kasih atas kepercayaan Anda.\n\n"
+            f"Silakan pilih menu di bawah, atau langsung sampaikan kebutuhan Anda:"
+        )
     else:
-        pesan_sapaan = "Halo! Saya bot Si Dodol. Pilih menu di bawah atau langsung ketik pesan bebas:"
+        pesan_sapaan = (
+            "Selamat datang di Sidodol Chatbot! 👋\n\n"
+            "Saya adalah asisten virtual yang siap membantu Anda melakukan booking layanan, "
+            "menjawab pertanyaan seputar layanan kami, dan menerima masukan Anda kapan saja.\n\n"
+            "Silakan pilih menu di bawah, atau langsung sampaikan kebutuhan Anda:"
+        )
 
     await update.message.reply_text(pesan_sapaan, reply_markup=reply_markup)
 
