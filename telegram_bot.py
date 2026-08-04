@@ -85,15 +85,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()  # wajib ada, supaya tombol tidak "loading" terus
-
     if query.data == "chat_bebas":
-        await query.edit_message_text("Silakan ketik pertanyaan Anda, saya akan coba jawab 🙂")
-    elif query.data == "menu_booking":
-        await query.edit_message_text("Untuk membuat booking, silakan ketik /booking")
+        await query.edit_message_text(
+            "Tentu! Anda bisa bertanya apa saja pada saya — baik seputar layanan kami, "
+            "jam operasional, harga, maupun pertanyaan umum lainnya. Silakan ketik pertanyaan Anda 🙂"
+        )
     elif query.data == "tentang":
         await query.edit_message_text(
-            "Saya adalah bot demo, SiDodol, yang dibuat Jimmy Faber untuk belajar chatbot development.\n"
-            "Ditenagai oleh Qwen 2.5 7B (LLM lokal)."
+            "Saya adalah asisten virtual Sidodol Chatbot, siap membantu Anda melakukan booking layanan, "
+            "menjawab pertanyaan, dan menerima masukan Anda kapan saja — 24 jam setiap hari."
         )
 
 # Handler untuk command /help
@@ -734,8 +734,27 @@ init_complaint_table()
 init_rating_table()
 init_allowed_users_table()
 
+async def booking_start_dari_tombol(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Entry point booking lewat tombol menu (bukan command /booking)"""
+    query = update.callback_query
+    await query.answer()
+    keyboard = [
+        [InlineKeyboardButton("💇 Potong Rambut", callback_data="potong_rambut")],
+        [InlineKeyboardButton("💆 Pijat/Spa", callback_data="pijat_spa")],
+        [InlineKeyboardButton("🚗 Servis Kendaraan", callback_data="servis_kendaraan")],
+    ]
+    await query.edit_message_text(
+        "Silakan pilih layanan yang ingin dibooking:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    return PILIH_LAYANAN
+
+
 booking_conv = ConversationHandler(
-    entry_points=[CommandHandler("booking", booking_start)],
+    entry_points=[
+        CommandHandler("booking", booking_start),
+        CallbackQueryHandler(booking_start_dari_tombol, pattern="^menu_booking$"),
+    ],
     states={
         PILIH_LAYANAN: [CallbackQueryHandler(layanan_dipilih)],
         INPUT_TANGGAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, tanggal_diterima)],
